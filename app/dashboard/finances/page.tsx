@@ -73,6 +73,12 @@ interface Expense {
   created_at: string
 }
 
+interface ExpenseItem {
+  product_id: string
+  quantity: number
+  unit_cost: number
+}
+
 const InputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 transition-all"
 const LabelClass = "block text-xs font-medium text-gray-600 mb-1.5"
 
@@ -164,7 +170,12 @@ export default function FinancesPage() {
   // Expense form
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [expForm, setExpForm] = useState({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) })
+  const [expItems, setExpItems] = useState<ExpenseItem[]>([])
   const [savingExp, setSavingExp] = useState(false)
+
+  // Expense item expansion
+  const [expandedExpId, setExpandedExpId] = useState<string | null>(null)
+  const [expItemsCache, setExpItemsCache] = useState<Record<string, Array<{ product_name: string; product_brand: string; quantity: number; unit_cost: number; subtotal: number }>>>({})
 
   // P&L data
   const [plData, setPlData] = useState({ revenue: 0, cogs: 0, grossProfit: 0, expenses: 0, netProfit: 0 })
@@ -376,12 +387,93 @@ export default function FinancesPage() {
     setSavingSale(false)
   }
 
+  function addExpItem() {
+    setExpItems(items => [...items, { product_id: '', quantity: 1, unit_cost: 0 }])
+  }
+
+  function updateExpItem(idx: number, field: string, value: string | number) {
+    setExpItems(items => items.map((item, i) => {
+      if (i !== idx) return item
+      if (field === 'product_id') {
+        const prod = products.find(p => p.id === value)
+        return { ...item, product_id: value as string, unit_cost: prod?.purchase_price || 0 }
+      }
+      return { ...item, [field]: value }
+    }))
+  }
+
+  function removeExpItem(idx: number) {
+    setExpItems(items => items.filter((_, i) => i !== idx))
+  }
+
+  const expItemsTotal = expItems.reduce((s, i) => s + (i.quantity * i.unit_cost), 0)
+
+  async function loadExpItems(expenseId: string) {
+    if (expItemsCache[expenseId]) return
+    const { data } = await supabase
+      .from('expense_items')
+      .select('product_name, product_brand, quantity, unit_cost, subtotal')
+      .eq('expense_id', expenseId)
+    setExpItemsCache(prev => ({ ...prev, [expenseId]: data || [] }))
+  }
+
+  function toggleExpExpand(expenseId: string) {
+    if (expandedExpId === expenseId) {
+      setExpandedExpId(null)
+    } else {
+      setExpandedExpId(expenseId)
+      loadExpItems(expenseId)
+    }
+  }
+
   async function handleCreateExpense() {
-    if (!expForm.category || !expForm.amount) { showToast('Categoría y monto son requeridos', 'error'); return }
+    if (!expForm.category) { showToast('La categoría es requerida', 'error'); return }
+    const isCompra = expForm.category === 'Compras'
+    const amount = isCompra ? expItemsTotal : Number(expForm.amount)
+    if (!amount) { showToast('El monto no puede ser cero', 'error'); return }
+    if (isCompra && expItems.some(i => !i.product_id)) { showToast('Selecciona un producto en cada fila', 'error'); return }
+
     setSavingExp(true)
-    const { error } = await supabase.from('expenses').insert([{ ...expForm, amount: Number(expForm.amount) }])
-    if (error) showToast('Error al crear gasto', 'error')
-    else { showToast('Gasto registrado', 'success'); setShowExpenseForm(false); setExpForm({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) }); fetchExpenses(); fetchCashFlow() }
+    const { data: expData, error } = await supabase
+      .from('expenses')
+      .insert([{ ...expForm, amount }])
+      .select()
+      .single()
+
+    if (error || !expData) { showToast('Error al crear gasto', 'error'); setSavingExp(false); return }
+
+    if (isCompra && expItems.length > 0) {
+      const rows = expItems.map(i => {
+        const prod = products.find(p => p.id === i.product_id)
+        return {
+          expense_id: expData.id,
+          product_id: i.product_id,
+          product_name: prod?.name || '',
+          product_brand: prod?.brand || '',
+          quantity: i.quantity,
+          unit_cost: i.unit_cost,
+        }
+      })
+      await supabase.from('expense_items').insert(rows)
+
+      // Update stock for each product
+      for (const item of expItems) {
+        const prod = products.find(p => p.id === item.product_id)
+        if (prod && item.quantity > 0) {
+          await supabase
+            .from('products')
+            .update({ stock_quantity: prod.stock_quantity + item.quantity })
+            .eq('id', item.product_id)
+        }
+      }
+    }
+
+    showToast('Gasto registrado', 'success')
+    setShowExpenseForm(false)
+    setExpForm({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) })
+    setExpItems([])
+    fetchExpenses()
+    fetchCashFlow()
     setSavingExp(false)
   }
 
@@ -673,7 +765,10 @@ export default function FinancesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={LabelClass}>Categoría *</label>
-                  <select className={InputClass} value={expForm.category} onChange={e => setExpForm(f => ({ ...f, category: e.target.value }))}>
+                  <select className={InputClass} value={expForm.category} onChange={e => {
+                    setExpForm(f => ({ ...f, category: e.target.value }))
+                    if (e.target.value !== 'Compras') setExpItems([])
+                  }}>
                     <option value="">Seleccionar</option>
                     {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
@@ -682,10 +777,12 @@ export default function FinancesPage() {
                   <label className={LabelClass}>Descripción</label>
                   <input className={InputClass} value={expForm.description} onChange={e => setExpForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción del gasto" />
                 </div>
-                <div>
-                  <label className={LabelClass}>Monto (DOP) *</label>
-                  <input type="number" className={InputClass} value={expForm.amount || ''} onChange={e => setExpForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-                </div>
+                {expForm.category !== 'Compras' && (
+                  <div>
+                    <label className={LabelClass}>Monto (DOP) *</label>
+                    <input type="number" className={InputClass} value={expForm.amount || ''} onChange={e => setExpForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                  </div>
+                )}
                 <div>
                   <label className={LabelClass}>Método de pago</label>
                   <select className={InputClass} value={expForm.payment_method} onChange={e => setExpForm(f => ({ ...f, payment_method: e.target.value }))}>
@@ -697,12 +794,83 @@ export default function FinancesPage() {
                   <input type="date" className={InputClass} value={expForm.expense_date} onChange={e => setExpForm(f => ({ ...f, expense_date: e.target.value }))} />
                 </div>
               </div>
-              <div className="flex gap-3 mt-4">
-                <button onClick={() => setShowExpenseForm(false)} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
+
+              {/* Products section for Compras */}
+              {expForm.category === 'Compras' && (
+                <div className="mt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-700">Productos comprados</p>
+                    <button onClick={addExpItem}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)' }}>
+                      <Plus className="w-3.5 h-3.5" /> Agregar producto
+                    </button>
+                  </div>
+
+                  {expItems.length === 0 ? (
+                    <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-gray-400 text-sm">
+                      Agrega los productos que compraste — el monto total se calculará automáticamente
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ background: '#faf9ff' }}>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Producto</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Cant.</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-36">Costo unit. (DOP)</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-32">Subtotal</th>
+                            <th className="px-4 py-2.5 w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {expItems.map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="px-4 py-2">
+                                <select className={InputClass} value={item.product_id} onChange={e => updateExpItem(idx, 'product_id', e.target.value)}>
+                                  <option value="">Seleccionar producto</option>
+                                  {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.brand} — {p.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-4 py-2">
+                                <input type="number" min={1} className={InputClass + ' text-right'} value={item.quantity} onChange={e => updateExpItem(idx, 'quantity', parseInt(e.target.value) || 1)} />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input type="number" min={0} className={InputClass + ' text-right'} value={item.unit_cost || ''} onChange={e => updateExpItem(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder="0" />
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-gray-700">
+                                {formatDOP(item.quantity * item.unit_cost)}
+                              </td>
+                              <td className="px-4 py-2">
+                                <button onClick={() => removeExpItem(idx)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#faf9ff' }}>
+                            <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-600">Total compra:</td>
+                            <td className="px-4 py-3 text-right text-sm font-bold" style={{ color: '#7c3aed' }}>{formatDOP(expItemsTotal)}</td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">El stock de cada producto se actualizará automáticamente al guardar</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => { setShowExpenseForm(false); setExpItems([]) }} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
                 <button onClick={handleCreateExpense} disabled={savingExp}
                   className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
                   style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', opacity: savingExp ? 0.7 : 1 }}>
-                  {savingExp ? 'Guardando...' : 'Registrar Gasto'}
+                  {savingExp ? 'Guardando...' : `Registrar Gasto${expForm.category === 'Compras' && expItemsTotal > 0 ? ` — ${formatDOP(expItemsTotal)}` : ''}`}
                 </button>
               </div>
             </div>
@@ -713,6 +881,7 @@ export default function FinancesPage() {
               <table className="w-full">
                 <thead>
                   <tr style={{ background: '#faf9ff' }}>
+                    <th className="px-3 py-4 w-8"></th>
                     {['Categoría', 'Descripción', 'Monto', 'Método', 'Fecha', ''].map(h => (
                       <th key={h} className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                     ))}
@@ -720,24 +889,70 @@ export default function FinancesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {expenses.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-400">Sin gastos registrados</td></tr>
+                    <tr><td colSpan={7} className="text-center py-12 text-gray-400">Sin gastos registrados</td></tr>
                   ) : expenses.map(e => (
-                    <tr key={e.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-4">
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${categoryBadge(e.category)}`}>{e.category}</span>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-700">{e.description || '—'}</td>
-                      <td className="px-5 py-4 text-sm font-bold text-red-600">{formatDOP(e.amount)}</td>
-                      <td className="px-5 py-4">
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${paymentBadgeClass(e.payment_method)}`}>{e.payment_method}</span>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-500">{e.expense_date}</td>
-                      <td className="px-5 py-4">
-                        <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-3 py-4 text-gray-400">
+                          {e.category === 'Compras' ? (
+                            <button onClick={() => toggleExpExpand(e.id)}>
+                              {expandedExpId === e.id
+                                ? <ChevronDown className="w-4 h-4" />
+                                : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                          ) : <span className="w-4 h-4 block" />}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${categoryBadge(e.category)}`}>{e.category}</span>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-700">{e.description || '—'}</td>
+                        <td className="px-5 py-4 text-sm font-bold text-red-600">{formatDOP(e.amount)}</td>
+                        <td className="px-5 py-4">
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${paymentBadgeClass(e.payment_method)}`}>{e.payment_method}</span>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-500">{e.expense_date}</td>
+                        <td className="px-5 py-4">
+                          <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedExpId === e.id && (
+                        <tr key={`${e.id}-detail`}>
+                          <td colSpan={7} className="px-0 py-0">
+                            <div className="mx-6 mb-4 rounded-xl overflow-hidden border border-orange-100" style={{ background: '#fffbeb' }}>
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b border-orange-100">
+                                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Producto</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Cant.</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Costo unit.</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Subtotal</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {expItemsCache[e.id] === undefined ? (
+                                    <tr><td colSpan={4} className="px-4 py-3 text-center text-gray-400 text-xs">Cargando...</td></tr>
+                                  ) : expItemsCache[e.id].length === 0 ? (
+                                    <tr><td colSpan={4} className="px-4 py-3 text-center text-gray-400 text-xs">Sin productos vinculados</td></tr>
+                                  ) : expItemsCache[e.id].map((item, i) => (
+                                    <tr key={i} className="border-b border-orange-50 last:border-0">
+                                      <td className="px-4 py-2.5">
+                                        <p className="font-medium text-gray-800">{item.product_name}</p>
+                                        <p className="text-xs text-gray-400">{item.product_brand}</p>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right text-gray-600">{item.quantity}</td>
+                                      <td className="px-4 py-2.5 text-right text-gray-600">{formatDOP(item.unit_cost)}</td>
+                                      <td className="px-4 py-2.5 text-right font-semibold text-gray-800">{formatDOP(item.subtotal)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>
