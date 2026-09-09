@@ -167,7 +167,7 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Inventario
           </h1>
           <p className="text-gray-500 mt-1 text-sm">{products.length} productos · {filtered.length} mostrando</p>
@@ -309,7 +309,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 {editing ? 'Editar Producto' : 'Nuevo Producto'}
               </h2>
               <button onClick={closeModal} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">

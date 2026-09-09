@@ -309,7 +309,7 @@ export default function DashboardPage() {
     <div className="p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
           Dashboard
         </h1>
         <p className="text-gray-500 mt-1 text-sm">
@@ -329,7 +329,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="text-sm text-gray-500 mb-1">{card.label}</p>
-              <p className="text-2xl font-bold mb-1" style={{ color: card.color, fontFamily: 'Playfair Display, serif' }}>
+              <p className="text-2xl font-bold mb-1" style={{ color: card.color, fontFamily: 'Montserrat, sans-serif' }}>
                 {card.value}
               </p>
               <p className="text-xs text-gray-400">{card.sub}</p>
@@ -344,7 +344,7 @@ export default function DashboardPage() {
         <div className="xl:col-span-2 bg-white rounded-2xl p-6 shadow-card border border-gray-100">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+              <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 Ventas — Últimos 30 días
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">Ingresos y ganancia por período</p>
@@ -368,7 +368,7 @@ export default function DashboardPage() {
 
         {/* Top Products */}
         <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-800 mb-5" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <h2 className="text-lg font-semibold text-gray-800 mb-5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Top 5 Productos
           </h2>
           {topProducts.length === 0 ? (
@@ -398,7 +398,7 @@ export default function DashboardPage() {
         {/* Recent transactions */}
         <div className="xl:col-span-2 bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-50">
-            <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               Transacciones Recientes
             </h2>
           </div>
@@ -431,7 +431,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-2">
             <Cake className="w-5 h-5" style={{ color: '#c9a84c' }} />
-            <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h2 className="text-lg font-semibold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               Cumpleaños del Mes
             </h2>
           </div>

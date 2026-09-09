@@ -221,7 +221,7 @@ export default function OrdersPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Órdenes de Compra
           </h1>
           <p className="text-gray-500 mt-1 text-sm">{orders.length} órdenes registradas</p>
@@ -315,7 +315,7 @@ export default function OrdersPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs tracking-widest uppercase mb-1" style={{ color: 'rgba(201,168,76,0.7)' }}>Orden de Compra</p>
-                  <h3 className="text-xl font-bold text-white" style={{ fontFamily: 'Playfair Display, serif' }}>#{detailOrder.order_number}</h3>
+                  <h3 className="text-xl font-bold text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>#{detailOrder.order_number}</h3>
                   <p className="text-white/60 text-sm mt-0.5">{detailOrder.supplier_name}</p>
                 </div>
                 <button onClick={() => setDetailOrder(null)} className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10">
@@ -433,7 +433,7 @@ export default function OrdersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>Nueva Orden de Compra</h2>
+              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>Nueva Orden de Compra</h2>
               <button onClick={() => setShowModal(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-5">

@@ -51,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           </div>
-          <p className="text-lg tracking-widest" style={{ fontFamily: 'Playfair Display, serif', color: '#c9a84c' }}>AURA</p>
+          <p className="text-lg tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif', color: '#c9a84c' }}>AURA</p>
         </div>
       </div>
     )
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Sparkles className="w-5 h-5" style={{ color: '#c9a84c' }} />
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-[0.2em]" style={{ fontFamily: 'Playfair Display, serif', color: '#c9a84c' }}>
+          <h1 className="text-xl font-bold tracking-[0.2em]" style={{ fontFamily: 'Montserrat, sans-serif', color: '#c9a84c' }}>
             AURA
           </h1>
           <p className="text-xs tracking-widest" style={{ color: 'rgba(201,168,76,0.45)', fontSize: '9px' }}>PERFUME STUDIO</p>
@@ -195,7 +195,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-lg font-bold tracking-widest" style={{ fontFamily: 'Playfair Display, serif', color: '#c9a84c' }}>
+          <span className="text-lg font-bold tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif', color: '#c9a84c' }}>
             AURA
           </span>
         </header>

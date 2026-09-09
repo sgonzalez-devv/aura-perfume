@@ -77,7 +77,7 @@ export default function LoginPage() {
         </div>
 
         {/* Brand text */}
-        <h1 className="text-6xl font-bold mb-4 tracking-widest" style={{ fontFamily: 'Playfair Display, serif', color: '#c9a84c', textShadow: '0 0 40px rgba(201,168,76,0.3)' }}>
+        <h1 className="text-6xl font-bold mb-4 tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif', color: '#c9a84c', textShadow: '0 0 40px rgba(201,168,76,0.3)' }}>
           AURA
         </h1>
         <p className="text-lg tracking-[0.3em] uppercase mb-8 text-center" style={{ color: 'rgba(201,168,76,0.7)', fontSize: '0.75rem' }}>
@@ -101,7 +101,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <h1 className="text-5xl font-bold tracking-widest mb-2" style={{ fontFamily: 'Playfair Display, serif', color: '#c9a84c' }}>
+            <h1 className="text-5xl font-bold tracking-widest mb-2" style={{ fontFamily: 'Montserrat, sans-serif', color: '#c9a84c' }}>
               AURA
             </h1>
             <p className="text-xs tracking-widest uppercase" style={{ color: 'rgba(201,168,76,0.6)' }}>
@@ -112,7 +112,7 @@ export default function LoginPage() {
           {/* Form card */}
           <div className="rounded-2xl p-8 lg:p-10" style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)', border: '1px solid rgba(201,168,76,0.15)', boxShadow: '0 25px 50px rgba(0,0,0,0.4)' }}>
             <div className="mb-8">
-              <h2 className="text-2xl font-semibold mb-2" style={{ color: 'white', fontFamily: 'Playfair Display, serif' }}>
+              <h2 className="text-2xl font-semibold mb-2" style={{ color: 'white', fontFamily: 'Montserrat, sans-serif' }}>
                 Bienvenido
               </h2>
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>

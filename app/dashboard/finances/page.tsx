@@ -338,7 +338,7 @@ export default function FinancesPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="mb-8">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
           Finanzas
         </h1>
         <p className="text-gray-500 mt-1 text-sm">Gestión de ventas, gastos y rentabilidad</p>
@@ -450,7 +450,7 @@ export default function FinancesPage() {
 
           {showExpenseForm && (
             <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Registrar Gasto</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4" style={{ fontFamily: 'Montserrat, sans-serif' }}>Registrar Gasto</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={LabelClass}>Categoría *</label>
@@ -543,13 +543,13 @@ export default function FinancesPage() {
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: card.bg, color: card.color }}>{card.icon}</div>
                   <p className="text-xs text-gray-500">{card.label}</p>
                 </div>
-                <p className="text-xl font-bold" style={{ color: card.color, fontFamily: 'Playfair Display, serif' }}>{formatDOP(card.value)}</p>
+                <p className="text-xl font-bold" style={{ color: card.color, fontFamily: 'Montserrat, sans-serif' }}>{formatDOP(card.value)}</p>
               </div>
             ))}
           </div>
 
           <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-5" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h3 className="text-lg font-semibold text-gray-800 mb-5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               Ventas vs Gastos — Últimos 6 meses
             </h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -569,7 +569,7 @@ export default function FinancesPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               Resumen del Mes
             </h3>
             <div className="space-y-3">
@@ -598,7 +598,7 @@ export default function FinancesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>Nueva Venta</h2>
+              <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>Nueva Venta</h2>
               <button onClick={() => { setShowSaleModal(false); setSaleItems([]) }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-5">

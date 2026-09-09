@@ -27,7 +27,7 @@ export default function HomePage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         </div>
-        <p style={{ color: '#c9a84c', fontFamily: 'Playfair Display, serif', fontSize: '1.25rem' }}>Aura</p>
+        <p style={{ color: '#c9a84c', fontFamily: 'Montserrat, sans-serif', fontSize: '1.25rem' }}>Aura</p>
       </div>
     </div>
   )
