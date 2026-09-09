@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { DollarSign, TrendingUp, Package, AlertTriangle, Cake } from 'lucide-react'
+import { DollarSign, TrendingUp, Package, AlertTriangle, Cake, Gift, Star, CheckCircle, Bell } from 'lucide-react'
 
 interface StatCard {
   label: string
@@ -48,6 +48,24 @@ interface Birthday {
   phone: string
 }
 
+interface LoyaltyNotification {
+  id: string
+  client_id: string
+  client_name: string
+  points_reached: number
+  reward_label: string
+  is_read: boolean
+  created_at: string
+}
+
+const LOYALTY_TIERS: Record<number, { icon: string; color: string; bg: string; border: string }> = {
+  250:  { icon: '🎁', color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200' },
+  500:  { icon: '✨', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+  1000: { icon: '🧴', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  2500: { icon: '🌹', color: 'text-rose-700',   bg: 'bg-rose-50',   border: 'border-rose-200' },
+  5000: { icon: '👑', color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200' },
+}
+
 function formatDOP(amount: number) {
   return `DOP $${amount.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
@@ -70,6 +88,7 @@ export default function DashboardPage() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [recentSales, setRecentSales] = useState<RecentSale[]>([])
   const [birthdays, setBirthdays] = useState<Birthday[]>([])
+  const [loyaltyNotifications, setLoyaltyNotifications] = useState<LoyaltyNotification[]>([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -83,8 +102,28 @@ export default function DashboardPage() {
       fetchTopProducts(),
       fetchRecentSales(),
       fetchBirthdays(),
+      fetchLoyaltyNotifications(),
     ])
     setLoading(false)
+  }
+
+  async function fetchLoyaltyNotifications() {
+    const { data } = await supabase
+      .from('loyalty_notifications')
+      .select('*')
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+    setLoyaltyNotifications(data || [])
+  }
+
+  async function markNotificationRead(id: string) {
+    await supabase.from('loyalty_notifications').update({ is_read: true }).eq('id', id)
+    setLoyaltyNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  async function markAllRead() {
+    await supabase.from('loyalty_notifications').update({ is_read: true }).eq('is_read', false)
+    setLoyaltyNotifications([])
   }
 
   async function fetchStats() {
@@ -316,6 +355,65 @@ export default function DashboardPage() {
           Resumen de tu negocio · {new Date().toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
+
+      {/* Loyalty Notifications */}
+      {loyaltyNotifications.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: '#c4b5fd', background: 'linear-gradient(135deg, #faf5ff, #f5f3ff)' }}>
+          <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: '#e9d5ff' }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Bell className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="font-bold text-purple-800 text-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  Notificaciones de Lealtad
+                </h2>
+                <p className="text-xs text-purple-500">{loyaltyNotifications.length} cliente{loyaltyNotifications.length !== 1 ? 's' : ''} listo{loyaltyNotifications.length !== 1 ? 's' : ''} para recibir su premio</p>
+              </div>
+            </div>
+            <button onClick={markAllRead} className="text-xs font-medium text-purple-600 hover:text-purple-800 underline underline-offset-2">
+              Marcar todas como atendidas
+            </button>
+          </div>
+          <div className="divide-y" style={{ borderColor: '#ede9fe' }}>
+            {loyaltyNotifications.map(n => {
+              const tier = LOYALTY_TIERS[n.points_reached] || LOYALTY_TIERS[250]
+              return (
+                <div key={n.id} className="px-5 py-4 flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #c9a84c, #a07c2a)', color: 'white' }}>
+                    {n.client_name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold text-gray-800">{n.client_name}</p>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${tier.bg} ${tier.color} ${tier.border}`}>
+                        {tier.icon} {n.points_reached} puntos
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-0.5">
+                      <span className="font-medium text-purple-700">Premio desbloqueado:</span> {n.reward_label}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.created_at).toLocaleDateString('es-DO', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {/* Action */}
+                  <button
+                    onClick={() => markNotificationRead(n.id)}
+                    title="Marcar como atendida"
+                    className="flex-shrink-0 p-2 rounded-lg hover:bg-purple-100 text-purple-400 hover:text-purple-700 transition-colors"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">

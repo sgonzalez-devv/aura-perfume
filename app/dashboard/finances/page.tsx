@@ -326,16 +326,42 @@ export default function FinancesPage() {
       }
     }
 
-    // Update client totals
+    // Update client totals + loyalty points
     if (saleClient) {
-      const client = clients.find(c => c.id === saleClient)
-      if (client) {
-        const { data: clientData } = await supabase.from('clients').select('total_purchases, purchase_count').eq('id', saleClient).single()
-        if (clientData) {
-          await supabase.from('clients').update({
-            total_purchases: (clientData.total_purchases || 0) + total,
-            purchase_count: (clientData.purchase_count || 0) + 1,
-          }).eq('id', saleClient)
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('total_purchases, purchase_count, loyalty_points, first_name, last_name')
+        .eq('id', saleClient)
+        .single()
+      if (clientData) {
+        const pointsEarned = Math.floor(total / 10)  // 1 point per DOP $10 spent
+        const oldPoints = clientData.loyalty_points || 0
+        const newPoints = oldPoints + pointsEarned
+
+        await supabase.from('clients').update({
+          total_purchases: (clientData.total_purchases || 0) + total,
+          purchase_count: (clientData.purchase_count || 0) + 1,
+          loyalty_points: newPoints,
+        }).eq('id', saleClient)
+
+        // Check if client crossed any loyalty tier threshold
+        const TIERS = [
+          { points: 250,  reward: '5% descuento en su próxima compra' },
+          { points: 500,  reward: '10% descuento en su próxima compra' },
+          { points: 1000, reward: 'Muestra gratis de perfume + 15% de descuento' },
+          { points: 2500, reward: 'Perfume de regalo valorado hasta DOP $2,000' },
+          { points: 5000, reward: 'Status VIP + perfume premium de regalo (hasta DOP $5,000)' },
+        ]
+        const clientName = `${clientData.first_name} ${clientData.last_name}`
+        for (const tier of TIERS) {
+          if (oldPoints < tier.points && newPoints >= tier.points) {
+            await supabase.from('loyalty_notifications').insert([{
+              client_id: saleClient,
+              client_name: clientName,
+              points_reached: tier.points,
+              reward_label: tier.reward,
+            }])
+          }
         }
       }
     }

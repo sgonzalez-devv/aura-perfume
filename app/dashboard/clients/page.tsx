@@ -330,6 +330,53 @@ export default function ClientsPage() {
                 </div>
               </div>
 
+              {/* Loyalty Progress */}
+              {(() => {
+                const pts = selected.loyalty_points || 0
+                const TIERS = [
+                  { points: 250,  label: '5% descuento', icon: '🎁' },
+                  { points: 500,  label: '10% descuento', icon: '✨' },
+                  { points: 1000, label: 'Muestra gratis', icon: '🧴' },
+                  { points: 2500, label: 'Perfume de regalo', icon: '🌹' },
+                  { points: 5000, label: 'Status VIP', icon: '👑' },
+                ]
+                const nextTier = TIERS.find(t => pts < t.points)
+                const currentTier = [...TIERS].reverse().find(t => pts >= t.points)
+
+                return (
+                  <div className="rounded-xl p-4" style={{ background: 'linear-gradient(135deg, #faf5ff, #f5f3ff)', border: '1px solid #e9d5ff' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-purple-700">Programa de Lealtad</p>
+                      {currentTier && (
+                        <span className="text-xs font-bold text-amber-600">{currentTier.icon} Premio desbloqueado</span>
+                      )}
+                    </div>
+                    {nextTier ? (
+                      <>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                          <span>{pts} pts</span>
+                          <span>Meta: {nextTier.points} pts → {nextTier.icon} {nextTier.label}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-purple-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, (pts / nextTier.points) * 100)}%`,
+                              background: 'linear-gradient(90deg, #7c3aed, #c9a84c)',
+                            }}
+                          />
+                        </div>
+                        <p className="text-xs text-purple-500 mt-1.5">
+                          Faltan {nextTier.points - pts} pts · equivale a {formatDOP((nextTier.points - pts) * 10)} más en compras
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm font-bold text-amber-600">👑 ¡Nivel máximo alcanzado!</p>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Info */}
               <div className="space-y-3">
                 {[
