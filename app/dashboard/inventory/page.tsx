@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package, ShoppingBag, ChevronLeft, ChevronRight, RefreshCw, Lightbulb } from 'lucide-react'
 import QuickCreateSupplier from '@/components/QuickCreateSupplier'
 import { useRouter } from 'next/navigation'
 
@@ -21,6 +21,7 @@ interface Product {
   base_notes: string
   supplier_id: string
   purchase_price: number
+  competitor_price: number
   selling_price: number
   stock_quantity: number
   min_stock_alert: number
@@ -51,8 +52,21 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 const emptyProduct: Omit<Product, 'id'> = {
   name: '', brand: '', sku: '', category: '', concentration: '', size_ml: 0,
   gender: '', fragrance_family: '', top_notes: '', heart_notes: '', base_notes: '',
-  supplier_id: '', purchase_price: 0, selling_price: 0, stock_quantity: 0,
-  min_stock_alert: 5, is_active: true,
+  supplier_id: '', purchase_price: 0, competitor_price: 0, selling_price: 0,
+  stock_quantity: 0, min_stock_alert: 5, is_active: true,
+}
+
+function generateSKU(brand: string, name: string, size_ml: number): string {
+  const b = brand.trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 3)
+  const n = name.trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 3)
+  const s = size_ml || Math.floor(Math.random() * 9 + 1) * 10
+  return `${b}-${n}-${s}`
+}
+
+function suggestedPrice(purchase: number, competitor: number): number {
+  if (purchase <= 0) return 0
+  if (competitor > 0) return Math.round(competitor * 0.9)  // 10% below competitor
+  return Math.round(purchase * 2)  // fallback: 100% markup
 }
 
 export default function InventoryPage() {
@@ -72,6 +86,15 @@ export default function InventoryPage() {
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
   const router = useRouter()
+
+  // Auto-generate SKU for new products when brand/name/size change
+  useEffect(() => {
+    if (!editing && (form.brand || form.name)) {
+      setForm(f => ({ ...f, sku: generateSKU(f.brand, f.name, f.size_ml) }))
+    }
+  }, [form.brand, form.name, form.size_ml, editing])
+
+  const suggested = suggestedPrice(form.purchase_price, form.competitor_price)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -113,22 +136,52 @@ export default function InventoryPage() {
     setSaving(true)
     const payload = {
       ...form,
-      sku: form.sku || null,              // avoid unique constraint on empty string
-      supplier_id: form.supplier_id || null, // empty string fails uuid column
+      sku: form.sku || null,
+      supplier_id: form.supplier_id || null,
       size_ml: Number(form.size_ml) || null,
       purchase_price: Number(form.purchase_price),
-      selling_price: Number(form.selling_price),
+      competitor_price: Number(form.competitor_price) || 0,
+      selling_price: Number(form.selling_price) || suggested,
       stock_quantity: Number(form.stock_quantity),
       min_stock_alert: Number(form.min_stock_alert),
     }
     if (editing) {
       const { error } = await supabase.from('products').update(payload).eq('id', editing.id)
-      if (error) showToast('Error al actualizar producto', 'error')
-      else { showToast('Producto actualizado correctamente', 'success'); closeModal(); fetchData() }
+      if (error) { showToast('Error al actualizar producto', 'error'); setSaving(false); return }
+
+      const stockAdded = Number(form.stock_quantity) - (editing.stock_quantity || 0)
+      if (stockAdded > 0 && Number(form.purchase_price) > 0) {
+        const restockCost = stockAdded * Number(form.purchase_price)
+        await supabase.from('expenses').insert([{
+          category: 'Compras',
+          description: `Reposición: ${form.name} - ${form.brand} (+${stockAdded} uds.)`,
+          amount: restockCost,
+          payment_method: 'Efectivo',
+          expense_date: new Date().toISOString().slice(0, 10),
+        }])
+        showToast(`Actualizado · Reposición ${formatDOP(restockCost)} registrada en Finanzas`, 'success')
+      } else {
+        showToast('Producto actualizado correctamente', 'success')
+      }
+      closeModal(); fetchData()
     } else {
       const { error } = await supabase.from('products').insert([payload])
-      if (error) showToast('Error al crear producto', 'error')
-      else { showToast('Producto creado correctamente', 'success'); closeModal(); fetchData() }
+      if (error) { showToast('Error al crear producto', 'error'); setSaving(false); return }
+
+      const totalCost = Number(form.purchase_price) * Number(form.stock_quantity)
+      if (totalCost > 0) {
+        await supabase.from('expenses').insert([{
+          category: 'Compras',
+          description: `Compra de inventario: ${form.name} - ${form.brand} (${form.stock_quantity} uds.)`,
+          amount: totalCost,
+          payment_method: 'Efectivo',
+          expense_date: new Date().toISOString().slice(0, 10),
+        }])
+        showToast(`Producto creado · ${formatDOP(totalCost)} registrado en Finanzas como salida`, 'success')
+      } else {
+        showToast('Producto creado correctamente', 'success')
+      }
+      closeModal(); fetchData()
     }
     setSaving(false)
   }
@@ -439,8 +492,19 @@ export default function InventoryPage() {
                   <input className={InputClass} value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="Ej. Tom Ford" />
                 </div>
                 <div>
-                  <label className={LabelClass}>SKU</label>
-                  <input className={InputClass} value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="Ej. TF-BO-100" />
+                  <label className={LabelClass}>
+                    SKU
+                    {!editing && <span className="ml-1.5 text-purple-500 text-xs font-normal">(auto-generado)</span>}
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input className={InputClass} value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="Ej. TF-BO-100" />
+                    {!editing && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, sku: generateSKU(f.brand, f.name, f.size_ml) }))}
+                        title="Regenerar SKU" className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400">
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className={LabelClass}>Proveedor</label>
@@ -516,15 +580,61 @@ export default function InventoryPage() {
               {/* Pricing & Stock */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Precios y Stock</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+
+                {/* Cost + Competitor inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label className={LabelClass}>Precio Compra (DOP)</label>
-                    <input type="number" className={InputClass} value={form.purchase_price || ''} onChange={e => setForm(f => ({ ...f, purchase_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                    <label className={LabelClass}>Precio de Compra al Suplidor (DOP) *</label>
+                    <input type="number" className={InputClass} value={form.purchase_price || ''} onChange={e => setForm(f => ({ ...f, purchase_price: parseFloat(e.target.value) || 0 }))} placeholder="Ej. 2500" />
+                    <p className="text-xs text-gray-400 mt-1">Lo que te costó comprarlo</p>
                   </div>
                   <div>
-                    <label className={LabelClass}>Precio Venta (DOP)</label>
-                    <input type="number" className={InputClass} value={form.selling_price || ''} onChange={e => setForm(f => ({ ...f, selling_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                    <label className={LabelClass}>Precio de la Competencia (DOP)</label>
+                    <input type="number" className={InputClass} value={form.competitor_price || ''} onChange={e => setForm(f => ({ ...f, competitor_price: parseFloat(e.target.value) || 0 }))} placeholder="Ej. 5500" />
+                    <p className="text-xs text-gray-400 mt-1">Precio de mercado / referencia</p>
                   </div>
+                </div>
+
+                {/* Suggested price box */}
+                {suggested > 0 && (
+                  <div className="rounded-xl p-4 mb-4" style={{ background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)', border: '1px solid #c4b5fd' }}>
+                    <div className="flex items-start gap-3">
+                      <Lightbulb className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-purple-800 mb-0.5">Precio sugerido de venta</p>
+                        <p className="text-2xl font-bold text-purple-700">{formatDOP(suggested)}</p>
+                        <p className="text-xs text-purple-500 mt-1">
+                          {form.competitor_price > 0
+                            ? `10% por debajo de la competencia (${formatDOP(form.competitor_price)})`
+                            : '100% de margen sobre precio de compra (sin referencia de competencia)'}
+                        </p>
+                        {form.purchase_price > 0 && (
+                          <p className="text-xs text-purple-400 mt-0.5">
+                            Ganancia sugerida: {formatDOP(suggested - form.purchase_price)} · Margen: {(((suggested - form.purchase_price) / suggested) * 100).toFixed(1)}%
+                          </p>
+                        )}
+                        <button type="button" onClick={() => setForm(f => ({ ...f, selling_price: suggested }))}
+                          className="mt-2 text-xs font-semibold text-purple-600 underline underline-offset-2 hover:text-purple-800">
+                          Usar este precio →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selling price (manual) */}
+                <div className="mb-4">
+                  <label className={LabelClass}>Precio de Venta Final (DOP)</label>
+                  <input type="number" className={InputClass} value={form.selling_price || ''} onChange={e => setForm(f => ({ ...f, selling_price: parseFloat(e.target.value) || 0 }))} placeholder={suggested > 0 ? `Sugerido: ${suggested}` : 'Ej. 5000'} />
+                  {form.selling_price > 0 && form.purchase_price > 0 && (
+                    <p className="text-xs mt-1" style={{ color: form.selling_price > form.purchase_price ? '#059669' : '#dc2626' }}>
+                      Ganancia: {formatDOP(form.selling_price - form.purchase_price)} · Margen: {(((form.selling_price - form.purchase_price) / form.selling_price) * 100).toFixed(1)}%
+                    </p>
+                  )}
+                </div>
+
+                {/* Stock */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={LabelClass}>Stock Actual</label>
                     <input type="number" className={InputClass} value={form.stock_quantity || ''} onChange={e => setForm(f => ({ ...f, stock_quantity: parseInt(e.target.value) || 0 }))} placeholder="0" />
@@ -534,24 +644,6 @@ export default function InventoryPage() {
                     <input type="number" className={InputClass} value={form.min_stock_alert || ''} onChange={e => setForm(f => ({ ...f, min_stock_alert: parseInt(e.target.value) || 0 }))} placeholder="5" />
                   </div>
                 </div>
-
-                {/* Margin preview */}
-                {form.purchase_price > 0 && form.selling_price > 0 && (
-                  <div className="rounded-xl p-4 mt-3" style={{ background: '#f5f3ff', border: '1px solid #e9d5ff' }}>
-                    <div className="flex items-center gap-6 text-sm">
-                      <div>
-                        <span className="text-gray-500">Ganancia por unidad: </span>
-                        <span className="font-bold text-emerald-600">{formatDOP(form.selling_price - form.purchase_price)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Margen: </span>
-                        <span className="font-bold text-purple-600">
-                          {(((form.selling_price - form.purchase_price) / form.selling_price) * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center gap-3">

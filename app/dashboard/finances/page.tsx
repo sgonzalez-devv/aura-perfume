@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2, ChevronDown, ChevronRight, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts'
 import QuickCreateClient from '@/components/QuickCreateClient'
 import QuickCreateProduct from '@/components/QuickCreateProduct'
 
@@ -77,7 +77,7 @@ const InputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm
 const LabelClass = "block text-xs font-medium text-gray-600 mb-1.5"
 
 const PAYMENT_METHODS = ['Efectivo', 'Tarjeta', 'Transferencia', 'PayPal', 'Azul']
-const EXPENSE_CATEGORIES = ['Alquiler', 'Servicios', 'Marketing', 'Suministros', 'Transporte', 'Nómina', 'Mantenimiento', 'Otro']
+const EXPENSE_CATEGORIES = ['Compras', 'Alquiler', 'Servicios', 'Marketing', 'Suministros', 'Transporte', 'Nómina', 'Mantenimiento', 'Otro']
 
 function paymentBadgeClass(method: string) {
   const map: Record<string, string> = {
@@ -170,11 +170,50 @@ export default function FinancesPage() {
   const [plData, setPlData] = useState({ revenue: 0, cogs: 0, grossProfit: 0, expenses: 0, netProfit: 0 })
   const [plChart, setPlChart] = useState<Array<{ month: string; ventas: number; gastos: number }>>([])
 
+  // Cash flow overview
+  const [cashFlow, setCashFlow] = useState<Array<{ fecha: string; entradas: number; salidas: number }>>([])
+  const [cashSummary, setCashSummary] = useState({ entradas: 0, salidas: 0, neto: 0 })
+
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
+
+  async function fetchCashFlow() {
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - 29)
+    const startStr = startDate.toISOString().slice(0, 10)
+
+    const [{ data: salesData }, { data: expData }] = await Promise.all([
+      supabase.from('sales').select('total, created_at').gte('created_at', startDate.toISOString()).eq('payment_status', 'pagado'),
+      supabase.from('expenses').select('amount, expense_date').gte('expense_date', startStr),
+    ])
+
+    const byDay: Record<string, { entradas: number; salidas: number }> = {}
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i)
+      byDay[d.toISOString().slice(0, 10)] = { entradas: 0, salidas: 0 }
+    }
+    ;(salesData || []).forEach(s => { const k = s.created_at.slice(0, 10); if (byDay[k]) byDay[k].entradas += s.total || 0 })
+    ;(expData || []).forEach(e => { if (byDay[e.expense_date]) byDay[e.expense_date].salidas += e.amount || 0 })
+
+    const sorted = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b))
+    const weekly: Array<{ fecha: string; entradas: number; salidas: number }> = []
+    for (let i = 0; i < sorted.length; i += 5) {
+      const chunk = sorted.slice(i, i + 5)
+      const d = new Date(chunk[0][0])
+      weekly.push({
+        fecha: `${d.getDate()}/${d.getMonth() + 1}`,
+        entradas: Math.round(chunk.reduce((s, [, v]) => s + v.entradas, 0)),
+        salidas: Math.round(chunk.reduce((s, [, v]) => s + v.salidas, 0)),
+      })
+    }
+    const totalEntradas = (salesData || []).reduce((s, x) => s + (x.total || 0), 0)
+    const totalSalidas = (expData || []).reduce((s, x) => s + (x.amount || 0), 0)
+    setCashFlow(weekly)
+    setCashSummary({ entradas: totalEntradas, salidas: totalSalidas, neto: totalEntradas - totalSalidas })
+  }
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchSales(), fetchExpenses(), fetchProducts(), fetchClients()])
+    await Promise.all([fetchSales(), fetchExpenses(), fetchProducts(), fetchClients(), fetchCashFlow()])
     setLoading(false)
   }, [])
 
@@ -307,7 +346,7 @@ export default function FinancesPage() {
     setSaleClient('')
     setSaleDiscount(0)
     setSaleNotes('')
-    await fetchSales()
+    await Promise.all([fetchSales(), fetchCashFlow()])
     setSavingSale(false)
   }
 
@@ -316,7 +355,7 @@ export default function FinancesPage() {
     setSavingExp(true)
     const { error } = await supabase.from('expenses').insert([{ ...expForm, amount: Number(expForm.amount) }])
     if (error) showToast('Error al crear gasto', 'error')
-    else { showToast('Gasto registrado', 'success'); setShowExpenseForm(false); setExpForm({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) }); fetchExpenses() }
+    else { showToast('Gasto registrado', 'success'); setShowExpenseForm(false); setExpForm({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) }); fetchExpenses(); fetchCashFlow() }
     setSavingExp(false)
   }
 
@@ -361,11 +400,82 @@ export default function FinancesPage() {
     <div className="p-6 lg:p-8">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
           Finanzas
         </h1>
         <p className="text-gray-500 mt-1 text-sm">Gestión de ventas, gastos y rentabilidad</p>
+      </div>
+
+      {/* Cash Flow Overview */}
+      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 mb-6">
+        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Flujo de Caja — Últimos 30 días</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Summary cards */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#f0fdf4' }}>
+              <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                <ArrowUpCircle className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Entradas</p>
+                <p className="text-lg font-bold text-green-600">{formatDOP(cashSummary.entradas)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#fef2f2' }}>
+              <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                <ArrowDownCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Salidas</p>
+                <p className="text-lg font-bold text-red-500">{formatDOP(cashSummary.salidas)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: cashSummary.neto >= 0 ? '#f5f3ff' : '#fef2f2' }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: cashSummary.neto >= 0 ? '#e9d5ff' : '#fee2e2' }}>
+                <DollarSign className={`w-5 h-5 ${cashSummary.neto >= 0 ? 'text-purple-600' : 'text-red-500'}`} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Resultado neto</p>
+                <p className={`text-lg font-bold ${cashSummary.neto >= 0 ? 'text-purple-600' : 'text-red-500'}`}>
+                  {cashSummary.neto >= 0 ? '+' : ''}{formatDOP(cashSummary.neto)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Area chart */}
+          <div className="lg:col-span-2">
+            <ResponsiveContainer width="100%" height={160}>
+              <AreaChart data={cashFlow} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradEntradas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradSalidas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : `${v}`} axisLine={false} tickLine={false} width={35} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [formatDOP(value), name === 'entradas' ? 'Entradas' : 'Salidas']}
+                  contentStyle={{ borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '11px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                />
+                <Area type="monotone" dataKey="entradas" stroke="#059669" strokeWidth={2} fill="url(#gradEntradas)" dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="salidas" stroke="#dc2626" strokeWidth={2} fill="url(#gradSalidas)" dot={false} activeDot={{ r: 4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 justify-end mt-1">
+              <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 rounded bg-green-500" /><span className="text-xs text-gray-400">Entradas</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 rounded bg-red-500" /><span className="text-xs text-gray-400">Salidas</span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}

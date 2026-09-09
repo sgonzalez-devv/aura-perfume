@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Search, Plus, Edit2, Star, Phone, MessageCircle, Download, X, AlertTriangle, CheckCircle, Users, Cake, ChevronRight } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Star, Phone, MessageCircle, Download, X, AlertTriangle, CheckCircle, Users, Cake, ChevronRight } from 'lucide-react'
 
 interface Client {
   id: string
@@ -62,6 +62,7 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [selected, setSelected] = useState<Client | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
 
@@ -119,6 +120,17 @@ export default function ClientsPage() {
       else { showToast('Cliente creado correctamente', 'success'); closeModal(); fetchClients() }
     }
     setSaving(false)
+  }
+
+  async function handleDelete(id: string) {
+    const { error } = await supabase.from('clients').delete().eq('id', id)
+    if (error) showToast('Error al eliminar cliente', 'error')
+    else {
+      showToast('Cliente eliminado', 'success')
+      setSelected(s => s?.id === id ? null : s)
+      fetchClients()
+    }
+    setDeleteConfirm(null)
   }
 
   function exportCSV() {
@@ -257,9 +269,14 @@ export default function ClientsPage() {
                       )}
                     </td>
                     <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
-                      <button onClick={e => openEdit(c, e)} className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={e => openEdit(c, e)} className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors" title="Editar">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); setDeleteConfirm(c.id) }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -431,6 +448,27 @@ export default function ClientsPage() {
                 className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
                 style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', opacity: saving ? 0.7 : 1 }}>
                 {saving ? 'Guardando...' : editing ? 'Guardar Cambios' : 'Crear Cliente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-xl text-center">
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7 text-red-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">¿Eliminar cliente?</h3>
+            <p className="text-sm text-gray-500 mb-6">Esta acción no se puede deshacer. El historial de compras asociado se mantendrá en el sistema.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600">
+                Eliminar
               </button>
             </div>
           </div>
