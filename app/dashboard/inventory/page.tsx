@@ -142,8 +142,8 @@ export default function InventoryPage() {
     return matchQ && matchG && matchC
   })
 
-  const categories = [...new Set(products.map(p => p.category).filter(Boolean))]
-  const genders = [...new Set(products.map(p => p.gender).filter(Boolean))]
+  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)))
+  const genders = Array.from(new Set(products.map(p => p.gender).filter(Boolean)))
 
   function stockColor(p: Product) {
     if (p.stock_quantity <= p.min_stock_alert) return 'text-red-600 bg-red-50'
