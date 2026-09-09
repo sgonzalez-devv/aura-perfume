@@ -372,7 +372,10 @@ export default function DashboardPage() {
             Top 5 Productos
           </h2>
           {topProducts.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">Sin datos de ventas</p>
+            <div className="text-center py-8">
+              <p className="text-sm text-gray-400">Sin ventas aún</p>
+              <p className="text-xs text-gray-300 mt-1">Ve a <strong className="text-purple-400">Finanzas → Nueva Venta</strong></p>
+            </div>
           ) : (
             <div className="space-y-4">
               {topProducts.map((p, i) => (
@@ -404,7 +407,13 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y divide-gray-50">
             {recentSales.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Sin ventas registradas</p>
+              <div className="px-6 py-10 text-center">
+                <DollarSign className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                <p className="text-sm font-medium text-gray-400">Sin ventas registradas</p>
+                <p className="text-xs text-gray-300 mt-1 max-w-xs mx-auto">
+                  Los productos del inventario no generan ventas automáticamente. Ve a <strong className="text-purple-400">Finanzas → Nueva Venta</strong> para registrar una venta.
+                </p>
+              </div>
             ) : (
               recentSales.map(sale => (
                 <div key={sale.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">

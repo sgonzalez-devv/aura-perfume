@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2 } from 'lucide-react'
+import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import QuickCreateClient from '@/components/QuickCreateClient'
 import QuickCreateProduct from '@/components/QuickCreateProduct'
@@ -121,6 +121,25 @@ export default function FinancesPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Sale detail expansion
+  const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null)
+  const [saleItemsCache, setSaleItemsCache] = useState<Record<string, Array<{ product_name: string; product_brand: string; quantity: number; unit_price: number; purchase_price: number; subtotal: number; profit: number }>>>({})
+
+  async function loadSaleItems(saleId: string) {
+    if (saleItemsCache[saleId]) return
+    const { data } = await supabase.from('sale_items').select('product_name, product_brand, quantity, unit_price, purchase_price, subtotal, profit').eq('sale_id', saleId)
+    setSaleItemsCache(prev => ({ ...prev, [saleId]: data || [] }))
+  }
+
+  function toggleSaleExpand(saleId: string) {
+    if (expandedSaleId === saleId) {
+      setExpandedSaleId(null)
+    } else {
+      setExpandedSaleId(saleId)
+      loadSaleItems(saleId)
+    }
+  }
 
   // Filters
   const [dateFrom, setDateFrom] = useState('')
@@ -411,6 +430,7 @@ export default function FinancesPage() {
                 <table className="w-full">
                   <thead>
                     <tr style={{ background: '#faf9ff' }}>
+                      <th className="px-3 py-4 w-8"></th>
                       {['#Venta', 'Cliente', 'Total', 'Descuento', 'Método', 'Estado', 'Fecha'].map(h => (
                         <th key={h} className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                       ))}
@@ -418,21 +438,79 @@ export default function FinancesPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredSales.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-12 text-gray-400">Sin ventas registradas</td></tr>
-                    ) : filteredSales.map(s => (
-                      <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-4 text-sm font-semibold" style={{ color: '#7c3aed' }}>#{s.sale_number}</td>
-                        <td className="px-5 py-4 text-sm text-gray-700">{s.client_name}</td>
-                        <td className="px-5 py-4 text-sm font-bold text-gray-800">{formatDOP(s.total)}</td>
-                        <td className="px-5 py-4 text-sm text-gray-500">{s.discount_amount > 0 ? formatDOP(s.discount_amount) : '—'}</td>
-                        <td className="px-5 py-4">
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${paymentBadgeClass(s.payment_method)}`}>{s.payment_method}</span>
+                      <tr>
+                        <td colSpan={8} className="text-center py-16">
+                          <DollarSign className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                          <p className="text-gray-400 text-sm font-medium">Sin ventas registradas</p>
+                          <p className="text-gray-400 text-xs mt-1">Presiona <strong>Nueva Venta</strong> para registrar una venta con los productos del inventario</p>
                         </td>
-                        <td className="px-5 py-4">
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${statusBadge(s.payment_status)}`}>{s.payment_status}</span>
-                        </td>
-                        <td className="px-5 py-4 text-sm text-gray-500">{new Date(s.created_at).toLocaleDateString('es-DO')}</td>
                       </tr>
+                    ) : filteredSales.map(s => (
+                      <>
+                        <tr key={s.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => toggleSaleExpand(s.id)}>
+                          <td className="px-3 py-4 text-gray-400">
+                            {expandedSaleId === s.id
+                              ? <ChevronDown className="w-4 h-4" />
+                              : <ChevronRight className="w-4 h-4" />}
+                          </td>
+                          <td className="px-5 py-4 text-sm font-semibold" style={{ color: '#7c3aed' }}>#{s.sale_number}</td>
+                          <td className="px-5 py-4 text-sm text-gray-700">{s.client_name}</td>
+                          <td className="px-5 py-4 text-sm font-bold text-gray-800">{formatDOP(s.total)}</td>
+                          <td className="px-5 py-4 text-sm text-gray-500">{s.discount_amount > 0 ? formatDOP(s.discount_amount) : '—'}</td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${paymentBadgeClass(s.payment_method)}`}>{s.payment_method}</span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${statusBadge(s.payment_status)}`}>{s.payment_status}</span>
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-500">{new Date(s.created_at).toLocaleDateString('es-DO')}</td>
+                        </tr>
+                        {expandedSaleId === s.id && (
+                          <tr key={`${s.id}-detail`}>
+                            <td colSpan={8} className="px-0 py-0">
+                              <div className="mx-6 mb-4 rounded-xl overflow-hidden border border-purple-100" style={{ background: '#faf9ff' }}>
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-purple-100">
+                                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Producto</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Cant.</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">P. Compra</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">P. Venta</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Subtotal</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-emerald-600">Ganancia</th>
+                                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-purple-600">Margen</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(saleItemsCache[s.id] || []).map((item, i) => {
+                                      const margin = item.unit_price > 0 ? ((item.profit / (item.unit_price * item.quantity)) * 100).toFixed(1) : '0'
+                                      return (
+                                        <tr key={i} className="border-b border-purple-50 last:border-0">
+                                          <td className="px-4 py-2.5">
+                                            <p className="font-medium text-gray-800">{item.product_name}</p>
+                                            <p className="text-xs text-gray-400">{item.product_brand}</p>
+                                          </td>
+                                          <td className="px-4 py-2.5 text-right text-gray-600">{item.quantity}</td>
+                                          <td className="px-4 py-2.5 text-right text-gray-500">{formatDOP(item.purchase_price)}</td>
+                                          <td className="px-4 py-2.5 text-right text-gray-700">{formatDOP(item.unit_price)}</td>
+                                          <td className="px-4 py-2.5 text-right font-medium text-gray-800">{formatDOP(item.subtotal)}</td>
+                                          <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{formatDOP(item.profit)}</td>
+                                          <td className="px-4 py-2.5 text-right">
+                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{margin}%</span>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                    {!saleItemsCache[s.id] && (
+                                      <tr><td colSpan={7} className="px-4 py-3 text-center text-gray-400 text-xs">Cargando...</td></tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                 </table>

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
 import QuickCreateSupplier from '@/components/QuickCreateSupplier'
+import { useRouter } from 'next/navigation'
 
 interface Product {
   id: string
@@ -70,6 +71,7 @@ export default function InventoryPage() {
   const [showQuickSupplier, setShowQuickSupplier] = useState(false)
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
+  const router = useRouter()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -164,23 +166,124 @@ export default function InventoryPage() {
   const InputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 transition-all"
   const LabelClass = "block text-xs font-medium text-gray-600 mb-1.5"
 
+  const PAGE_SIZE = 12
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const inStock = filtered.filter(p => p.is_active && p.stock_quantity > 0)
+  const outOfStock = filtered.filter(p => !p.is_active || p.stock_quantity === 0)
+
+  const totalPages = Math.ceil(inStock.length / PAGE_SIZE)
+  const pagedInStock = inStock.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  function ProductCard({ p }: { p: Product }) {
+    const stock = p.stock_quantity
+    const min = p.min_stock_alert || 0
+    const stockColor = stock === 0 ? 'text-red-600 bg-red-50 border-red-200'
+      : stock <= min ? 'text-red-600 bg-red-50 border-red-200'
+      : stock <= min * 2 ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+      : 'text-green-600 bg-green-50 border-green-200'
+    const stockLabel = stock === 0 ? 'Sin stock' : `${stock} uds.`
+
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
+        {/* Top row: status badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${stockColor}`}>
+            {stock <= min && stock > 0 && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+            {stockLabel}
+          </span>
+          {p.category && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 font-medium border border-purple-100">
+              {p.category}
+            </span>
+          )}
+          {p.gender && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium">
+              {p.gender}
+            </span>
+          )}
+        </div>
+
+        {/* Product name */}
+        <div>
+          <h3 className="font-bold text-gray-800 text-base leading-tight">{p.name}</h3>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {p.brand}
+            {p.size_ml ? ` · ${p.size_ml}ml` : ''}
+            {p.concentration ? ` · ${p.concentration}` : ''}
+          </p>
+          {p.sku && <p className="text-xs text-gray-400 mt-1">SKU: {p.sku}</p>}
+        </div>
+
+        {/* Stock bar */}
+        {min > 0 && (
+          <div>
+            <div className="flex justify-between text-xs text-gray-400 mb-1">
+              <span>Stock</span>
+              <span>Mín. {min}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${stock === 0 ? 'bg-red-400' : stock <= min ? 'bg-red-400' : stock <= min * 2 ? 'bg-yellow-400' : 'bg-green-400'}`}
+                style={{ width: `${Math.min(100, (stock / Math.max(stock, min * 3)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1 border-t border-gray-50">
+          <button
+            onClick={() => router.push('/dashboard/finances')}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all"
+            style={{ background: '#f5f3ff', color: '#7c3aed' }}
+            title="Registrar venta con este producto en Finanzas"
+          >
+            <ShoppingBag className="w-3.5 h-3.5" /> Vender
+          </button>
+          <button onClick={() => openEdit(p)} className="p-2 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors" title="Editar">
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button onClick={() => setDeleteConfirm(p.id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 lg:p-8">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Inventario
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">{products.length} productos · {filtered.length} mostrando</p>
+          <p className="text-gray-500 mt-1 text-sm">{products.length} productos en catálogo</p>
         </div>
         <button onClick={openAdd} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
           style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}>
           <Plus className="w-4 h-4" />
           Nuevo Producto
         </button>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: 'Total', value: products.length, color: '#7c3aed', bg: '#f5f3ff' },
+          { label: 'Con stock', value: products.filter(p => p.is_active && p.stock_quantity > 0).length, color: '#059669', bg: '#ecfdf5' },
+          { label: 'Stock bajo', value: products.filter(p => p.is_active && p.stock_quantity > 0 && p.stock_quantity <= p.min_stock_alert).length, color: '#d97706', bg: '#fffbeb' },
+          { label: 'Sin stock', value: products.filter(p => !p.is_active || p.stock_quantity === 0).length, color: '#dc2626', bg: '#fef2f2' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-white rounded-xl border border-gray-100 p-4 shadow-card">
+            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
+          </div>
+        ))}
       </div>
 
       {/* Filters */}
@@ -192,22 +295,22 @@ export default function InventoryPage() {
               type="text"
               placeholder="Buscar por nombre, marca o SKU..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100"
             />
           </div>
-          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}
+          <select value={filterGender} onChange={e => { setFilterGender(e.target.value); setCurrentPage(1) }}
             className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-purple-400 bg-white text-gray-700">
             <option value="">Todos los géneros</option>
             {genders.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+          <select value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1) }}
             className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-purple-400 bg-white text-gray-700">
             <option value="">Todas las categorías</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           {(searchQuery || filterGender || filterCategory) && (
-            <button onClick={() => { setSearchQuery(''); setFilterGender(''); setFilterCategory('') }}
+            <button onClick={() => { setSearchQuery(''); setFilterGender(''); setFilterCategory(''); setCurrentPage(1) }}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50">
               <X className="w-4 h-4" /> Limpiar
             </button>
@@ -215,77 +318,81 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <svg className="w-8 h-8 animate-spin" style={{ color: '#7c3aed' }} fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="w-8 h-8 animate-spin" style={{ color: '#7c3aed' }} fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      ) : (
+        <>
+          {/* IN STOCK section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-base font-bold text-gray-700" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Con Stock
+              </h2>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                {inStock.length}
+              </span>
+            </div>
+            {inStock.length === 0 ? (
+              <div className="text-center py-12 rounded-2xl border-2 border-dashed border-gray-200">
+                <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-gray-400 text-sm">No hay productos con stock disponible</p>
+                <button onClick={openAdd} className="mt-3 text-sm font-medium" style={{ color: '#7c3aed' }}>
+                  + Agregar producto
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {pagedInStock.map(p => <ProductCard key={p.id} p={p} />)}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <button
+                      onClick={() => setCurrentPage(pg => Math.max(1, pg - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(pg => Math.min(totalPages, pg + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-400">No se encontraron productos</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr style={{ background: '#faf9ff' }}>
-                  {['Producto', 'SKU', 'Categoría', 'Género', 'P. Compra', 'P. Venta', 'Margen', 'Stock', 'Estado', ''].map(h => (
-                    <th key={h} className="px-5 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map(p => (
-                  <tr key={p.id} className="table-row-hover transition-colors" onClick={() => openEdit(p)}>
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{p.name}</p>
-                        <p className="text-xs text-gray-400">{p.brand} · {p.size_ml}ml · {p.concentration}</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{p.sku || '—'}</td>
-                    <td className="px-5 py-4">
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 font-medium">{p.category || '—'}</span>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-600">{p.gender || '—'}</td>
-                    <td className="px-5 py-4 text-sm text-gray-700">{formatDOP(p.purchase_price)}</td>
-                    <td className="px-5 py-4 text-sm font-semibold text-gray-800">{formatDOP(p.selling_price)}</td>
-                    <td className="px-5 py-4">
-                      <span className="text-sm font-medium text-emerald-600">{margin(p)}</span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${stockColor(p)}`}>
-                        {p.stock_quantity} uds.
-                        {p.stock_quantity <= p.min_stock_alert && <AlertTriangle className="w-3 h-3 inline ml-1" />}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${p.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {p.is_active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteConfirm(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+
+          {/* OUT OF STOCK / INACTIVE section */}
+          {outOfStock.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-base font-bold text-gray-700" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  Sin Stock / Inactivos
+                </h2>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                  {outOfStock.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 opacity-75">
+                {outOfStock.map(p => <ProductCard key={p.id} p={p} />)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Delete confirmation */}
       {deleteConfirm && (
@@ -407,42 +514,45 @@ export default function InventoryPage() {
               </div>
 
               {/* Pricing & Stock */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className={LabelClass}>Precio Compra (DOP)</label>
-                  <input type="number" className={InputClass} value={form.purchase_price || ''} onChange={e => setForm(f => ({ ...f, purchase_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-                </div>
-                <div>
-                  <label className={LabelClass}>Precio Venta (DOP)</label>
-                  <input type="number" className={InputClass} value={form.selling_price || ''} onChange={e => setForm(f => ({ ...f, selling_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-                </div>
-                <div>
-                  <label className={LabelClass}>Stock Actual</label>
-                  <input type="number" className={InputClass} value={form.stock_quantity || ''} onChange={e => setForm(f => ({ ...f, stock_quantity: parseInt(e.target.value) || 0 }))} placeholder="0" />
-                </div>
-                <div>
-                  <label className={LabelClass}>Alerta Mín. Stock</label>
-                  <input type="number" className={InputClass} value={form.min_stock_alert || ''} onChange={e => setForm(f => ({ ...f, min_stock_alert: parseInt(e.target.value) || 0 }))} placeholder="5" />
-                </div>
-              </div>
-
-              {/* Margin preview */}
-              {form.purchase_price > 0 && form.selling_price > 0 && (
-                <div className="rounded-xl p-4" style={{ background: '#f5f3ff', border: '1px solid #e9d5ff' }}>
-                  <div className="flex items-center gap-6 text-sm">
-                    <div>
-                      <span className="text-gray-500">Ganancia: </span>
-                      <span className="font-bold text-emerald-600">{formatDOP(form.selling_price - form.purchase_price)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Margen: </span>
-                      <span className="font-bold text-purple-600">
-                        {(((form.selling_price - form.purchase_price) / form.selling_price) * 100).toFixed(1)}%
-                      </span>
-                    </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Precios y Stock</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className={LabelClass}>Precio Compra (DOP)</label>
+                    <input type="number" className={InputClass} value={form.purchase_price || ''} onChange={e => setForm(f => ({ ...f, purchase_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Precio Venta (DOP)</label>
+                    <input type="number" className={InputClass} value={form.selling_price || ''} onChange={e => setForm(f => ({ ...f, selling_price: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Stock Actual</label>
+                    <input type="number" className={InputClass} value={form.stock_quantity || ''} onChange={e => setForm(f => ({ ...f, stock_quantity: parseInt(e.target.value) || 0 }))} placeholder="0" />
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Alerta Mín. Stock</label>
+                    <input type="number" className={InputClass} value={form.min_stock_alert || ''} onChange={e => setForm(f => ({ ...f, min_stock_alert: parseInt(e.target.value) || 0 }))} placeholder="5" />
                   </div>
                 </div>
-              )}
+
+                {/* Margin preview */}
+                {form.purchase_price > 0 && form.selling_price > 0 && (
+                  <div className="rounded-xl p-4 mt-3" style={{ background: '#f5f3ff', border: '1px solid #e9d5ff' }}>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div>
+                        <span className="text-gray-500">Ganancia por unidad: </span>
+                        <span className="font-bold text-emerald-600">{formatDOP(form.selling_price - form.purchase_price)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Margen: </span>
+                        <span className="font-bold text-purple-600">
+                          {(((form.selling_price - form.purchase_price) / form.selling_price) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="is_active" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 accent-purple-600" />
