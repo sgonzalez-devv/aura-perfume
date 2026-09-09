@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, AlertTriangle, CheckCircle, ShoppingCart, Eye, ChevronDown } from 'lucide-react'
+import QuickCreateSupplier from '@/components/QuickCreateSupplier'
+import QuickCreateProduct from '@/components/QuickCreateProduct'
 
 interface Supplier {
   id: string
@@ -30,7 +32,7 @@ interface OrderItem {
 
 interface Order {
   id: string
-  order_number: string
+  order_number: number
   supplier_id: string
   supplier_name: string
   status: string
@@ -83,6 +85,11 @@ export default function OrdersPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [filterStatus, setFilterStatus] = useState('')
+
+  // Quick-create modals
+  const [showQuickSupplier, setShowQuickSupplier] = useState(false)
+  const [showQuickProduct, setShowQuickProduct] = useState(false)
+  const [quickProductIdx, setQuickProductIdx] = useState<number | null>(null)
 
   // Form state
   const [formSupplier, setFormSupplier] = useState('')
@@ -163,10 +170,7 @@ export default function OrdersPage() {
     const supplier = suppliers.find(s => s.id === formSupplier)
     const subtotal = formItems.reduce((s, i) => s + (i.unit_cost * i.quantity_ordered), 0)
     const total = subtotal + formShipping
-    const orderNumber = `OC-${Date.now()}`
-
     const { data: orderData, error } = await supabase.from('purchase_orders').insert([{
-      order_number: orderNumber,
       supplier_id: formSupplier,
       supplier_name: supplier?.name || '',
       status: formStatus,
@@ -440,10 +444,20 @@ export default function OrdersPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={LabelClass}>Proveedor *</label>
-                  <select className={InputClass} value={formSupplier} onChange={e => setFormSupplier(e.target.value)}>
-                    <option value="">Seleccionar proveedor</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select className={InputClass} value={formSupplier} onChange={e => setFormSupplier(e.target.value)}>
+                      <option value="">Seleccionar proveedor</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickSupplier(true)}
+                      title="Crear nuevo proveedor"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className={LabelClass}>Estado</label>
@@ -479,11 +493,19 @@ export default function OrdersPage() {
                 <div className="space-y-3">
                   {formItems.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 rounded-xl" style={{ background: '#faf9ff', border: '1px solid #e9d5ff' }}>
-                      <div className="col-span-5">
+                      <div className="col-span-5 flex gap-1">
                         <select className={InputClass} value={item.product_id} onChange={e => updateItem(idx, 'product_id', e.target.value)}>
                           <option value="">Seleccionar producto</option>
                           {products.map(p => <option key={p.id} value={p.id}>{p.name} — {p.brand}</option>)}
                         </select>
+                        <button
+                          type="button"
+                          onClick={() => { setQuickProductIdx(idx); setShowQuickProduct(true) }}
+                          title="Crear nuevo producto"
+                          className="flex-shrink-0 w-8 h-9 flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <div className="col-span-2">
                         <input type="number" className={InputClass} value={item.quantity_ordered} min={1} onChange={e => updateItem(idx, 'quantity_ordered', parseInt(e.target.value) || 1)} placeholder="Cant." />
@@ -539,6 +561,30 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showQuickSupplier && (
+        <QuickCreateSupplier
+          onCreated={(id, name) => {
+            setSuppliers(prev => [...prev, { id, name }])
+            setFormSupplier(id)
+            setShowQuickSupplier(false)
+          }}
+          onClose={() => setShowQuickSupplier(false)}
+        />
+      )}
+
+      {showQuickProduct && quickProductIdx !== null && (
+        <QuickCreateProduct
+          onCreated={(id, label, _sellingPrice, purchasePrice) => {
+            const [name, brand] = label.split(' — ')
+            setProducts(prev => [...prev, { id, name, brand: brand || '', purchase_price: purchasePrice }])
+            updateItem(quickProductIdx, 'product_id', id)
+            setShowQuickProduct(false)
+            setQuickProductIdx(null)
+          }}
+          onClose={() => { setShowQuickProduct(false); setQuickProductIdx(null) }}
+        />
       )}
     </div>
   )

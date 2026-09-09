@@ -90,12 +90,15 @@ export default function SuppliersPage() {
   async function handleSave() {
     if (!form.name) { showToast('El nombre es requerido', 'error'); return }
     setSaving(true)
+    // Only send DB columns — form may contain computed fields (product_count) from SupplierWithCount
+    const { name, contact_name, email, phone, country, notes } = form
+    const payload = { name, contact_name, email, phone, country, notes }
     if (editing) {
-      const { error } = await supabase.from('suppliers').update(form).eq('id', editing.id)
+      const { error } = await supabase.from('suppliers').update(payload).eq('id', editing.id)
       if (error) showToast('Error al actualizar proveedor', 'error')
       else { showToast('Proveedor actualizado', 'success'); closeModal(); fetchSuppliers() }
     } else {
-      const { error } = await supabase.from('suppliers').insert([form])
+      const { error } = await supabase.from('suppliers').insert([payload])
       if (error) showToast('Error al crear proveedor', 'error')
       else { showToast('Proveedor creado correctamente', 'success'); closeModal(); fetchSuppliers() }
     }

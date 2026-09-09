@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package } from 'lucide-react'
+import QuickCreateSupplier from '@/components/QuickCreateSupplier'
 
 interface Product {
   id: string
@@ -66,6 +67,7 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [showQuickSupplier, setShowQuickSupplier] = useState(false)
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
 
@@ -109,7 +111,9 @@ export default function InventoryPage() {
     setSaving(true)
     const payload = {
       ...form,
-      size_ml: Number(form.size_ml),
+      sku: form.sku || null,              // avoid unique constraint on empty string
+      supplier_id: form.supplier_id || null, // empty string fails uuid column
+      size_ml: Number(form.size_ml) || null,
       purchase_price: Number(form.purchase_price),
       selling_price: Number(form.selling_price),
       stock_quantity: Number(form.stock_quantity),
@@ -333,10 +337,20 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <label className={LabelClass}>Proveedor</label>
-                  <select className={InputClass} value={form.supplier_id} onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))}>
-                    <option value="">Sin proveedor</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select className={InputClass} value={form.supplier_id} onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))}>
+                      <option value="">Sin proveedor</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickSupplier(true)}
+                      title="Crear nuevo proveedor"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -448,6 +462,17 @@ export default function InventoryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showQuickSupplier && (
+        <QuickCreateSupplier
+          onCreated={(id, name) => {
+            setSuppliers(prev => [...prev, { id, name }])
+            setForm(f => ({ ...f, supplier_id: id }))
+            setShowQuickSupplier(false)
+          }}
+          onClose={() => setShowQuickSupplier(false)}
+        />
       )}
     </div>
   )

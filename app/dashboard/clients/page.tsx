@@ -100,7 +100,15 @@ export default function ClientsPage() {
       return
     }
     setSaving(true)
-    const payload = { ...form, loyalty_points: Number(form.loyalty_points), total_purchases: Number(form.total_purchases), purchase_count: Number(form.purchase_count) }
+    const payload = {
+      ...form,
+      email: form.email || null,       // avoid unique constraint on empty string
+      birthday: form.birthday || null, // empty string fails date column
+      gender: form.gender || null,
+      loyalty_points: Number(form.loyalty_points),
+      total_purchases: Number(form.total_purchases),
+      purchase_count: Number(form.purchase_count),
+    }
     if (editing) {
       const { error } = await supabase.from('clients').update(payload).eq('id', editing.id)
       if (error) showToast('Error al actualizar cliente', 'error')

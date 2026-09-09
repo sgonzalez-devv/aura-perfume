@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import QuickCreateClient from '@/components/QuickCreateClient'
+import QuickCreateProduct from '@/components/QuickCreateProduct'
 
 function formatDOP(n: number) {
   return `DOP $${(n || 0).toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -23,7 +25,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
 interface Sale {
   id: string
-  sale_number: string
+  sale_number: number
   client_id: string
   client_name?: string
   subtotal: number
@@ -124,6 +126,11 @@ export default function FinancesPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
+
+  // Quick-create modals
+  const [showQuickClient, setShowQuickClient] = useState(false)
+  const [showQuickProduct, setShowQuickProduct] = useState(false)
+  const [quickProductIdx, setQuickProductIdx] = useState<number | null>(null)
 
   // Sale modal
   const [showSaleModal, setShowSaleModal] = useState(false)
@@ -229,9 +236,7 @@ export default function FinancesPage() {
     setSavingSale(true)
     const subtotal = saleItems.reduce((s, i) => s + i.unit_price * i.quantity, 0)
     const total = Math.max(0, subtotal - saleDiscount)
-    const saleNumber = `VTA-${Date.now()}`
     const { data: saleData, error } = await supabase.from('sales').insert([{
-      sale_number: saleNumber,
       client_id: saleClient || null,
       subtotal, discount_amount: saleDiscount, total,
       payment_method: salePayment, payment_status: saleStatus, notes: saleNotes,
@@ -250,7 +255,7 @@ export default function FinancesPage() {
         unit_price: i.unit_price,
         purchase_price: i.purchase_price,
         subtotal: i.unit_price * i.quantity,
-        profit: (i.unit_price - i.purchase_price) * i.quantity,
+        // profit is a GENERATED ALWAYS column — do not insert it
       }
     })
     await supabase.from('sale_items').insert(items)
@@ -605,10 +610,20 @@ export default function FinancesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={LabelClass}>Cliente</label>
-                  <select className={InputClass} value={saleClient} onChange={e => setSaleClient(e.target.value)}>
-                    <option value="">Cliente anónimo</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select className={InputClass} value={saleClient} onChange={e => setSaleClient(e.target.value)}>
+                      <option value="">Cliente anónimo</option>
+                      {clients.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickClient(true)}
+                      title="Crear nuevo cliente"
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className={LabelClass}>Método de pago</label>
@@ -640,11 +655,19 @@ export default function FinancesPage() {
                 <div className="space-y-3">
                   {saleItems.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 rounded-xl" style={{ background: '#faf9ff', border: '1px solid #e9d5ff' }}>
-                      <div className="col-span-5">
+                      <div className="col-span-5 flex gap-1">
                         <select className={InputClass} value={item.product_id} onChange={e => updateSaleItem(idx, 'product_id', e.target.value)}>
                           <option value="">Seleccionar producto</option>
                           {products.map(p => <option key={p.id} value={p.id}>{p.name} — {p.brand}</option>)}
                         </select>
+                        <button
+                          type="button"
+                          onClick={() => { setQuickProductIdx(idx); setShowQuickProduct(true) }}
+                          title="Crear nuevo producto"
+                          className="flex-shrink-0 w-8 h-9 flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <div className="col-span-2">
                         <input type="number" className={InputClass} value={item.quantity} min={1} onChange={e => updateSaleItem(idx, 'quantity', parseInt(e.target.value) || 1)} placeholder="Cant." />
@@ -702,6 +725,31 @@ export default function FinancesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showQuickClient && (
+        <QuickCreateClient
+          onCreated={(id, label) => {
+            const parts = label.split(' ')
+            setClients(prev => [...prev, { id, first_name: parts[0], last_name: parts.slice(1).join(' ') }])
+            setSaleClient(id)
+            setShowQuickClient(false)
+          }}
+          onClose={() => setShowQuickClient(false)}
+        />
+      )}
+
+      {showQuickProduct && quickProductIdx !== null && (
+        <QuickCreateProduct
+          onCreated={(id, label, sellingPrice, purchasePrice) => {
+            const [name, brand] = label.split(' — ')
+            setProducts(prev => [...prev, { id, name, brand: brand || '', selling_price: sellingPrice, purchase_price: purchasePrice, stock_quantity: 0 }])
+            updateSaleItem(quickProductIdx, 'product_id', id)
+            setShowQuickProduct(false)
+            setQuickProductIdx(null)
+          }}
+          onClose={() => { setShowQuickProduct(false); setQuickProductIdx(null) }}
+        />
       )}
     </div>
   )
