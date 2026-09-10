@@ -56,8 +56,6 @@ interface ShoppingItem {
 interface Supplier { id: string; name: string }
 
 const emptyPurchaseForm = {
-  brand: '',
-  name: '',
   sku: '',
   size_ml: 0,
   concentration: '',
@@ -89,14 +87,11 @@ export default function ShoppingListPage() {
   const [form, setForm] = useState({ brand: '', name: '', supplier_id: '', notes: '' })
   const [saving, setSaving] = useState(false)
 
-  // Purchase modal (full product form) — used both from list items and the direct "Nuevo Producto" button
+  // Purchase modal — opened when marking a list item as bought
   const [purchaseItem, setPurchaseItem] = useState<ShoppingItem | null>(null)
-  const [showDirectForm, setShowDirectForm] = useState(false)
   const [pForm, setPForm] = useState(emptyPurchaseForm)
   const [pSuppliers, setPSuppliers] = useState<string[]>([])
   const [savingPurchase, setSavingPurchase] = useState(false)
-
-  const isProductModalOpen = !!purchaseItem || showDirectForm
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ message: msg, type })
 
@@ -116,13 +111,11 @@ export default function ShoppingListPage() {
 
   // ── auto-SKU in purchase form ──────────────────────────────────────────
   useEffect(() => {
-    if (isProductModalOpen) {
-      const brand = purchaseItem?.brand ?? pForm.brand
-      const name = purchaseItem?.name ?? pForm.name
-      if (brand || name) setPForm(f => ({ ...f, sku: generateSKU(brand, name, f.size_ml) }))
+    if (purchaseItem) {
+      setPForm(f => ({ ...f, sku: generateSKU(purchaseItem.brand, purchaseItem.name, f.size_ml) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchaseItem, pForm.brand, pForm.name, pForm.size_ml])
+  }, [purchaseItem, pForm.size_ml])
 
   const suggested = suggestedPrice(pForm.purchase_price, pForm.supplier_shipping_cost, pForm.client_shipping_cost, pForm.competitor_price)
 
@@ -143,37 +136,28 @@ export default function ShoppingListPage() {
     setSaving(false)
   }
 
-  // ── open product form ─────────────────────────────────────────────────
+  // ── open purchase confirmation modal ──────────────────────────────────
   function openPurchaseModal(item: ShoppingItem) {
     setPurchaseItem(item)
     setPForm({ ...emptyPurchaseForm, sku: generateSKU(item.brand, item.name, 0) })
     setPSuppliers(item.supplier_id ? [item.supplier_id] : [])
   }
 
-  function openDirectForm() {
-    setPurchaseItem(null)
-    setPForm(emptyPurchaseForm)
-    setPSuppliers([])
-    setShowDirectForm(true)
-  }
-
   function closeProductModal() {
     setPurchaseItem(null)
-    setShowDirectForm(false)
     setPForm(emptyPurchaseForm)
     setPSuppliers([])
   }
 
   // ── confirm purchase → add to inventory ───────────────────────────────
   async function handleConfirmPurchase() {
-    const brand = purchaseItem?.brand ?? pForm.brand.trim()
-    const name = purchaseItem?.name ?? pForm.name.trim()
-    if (!brand || !name) { showToast('Marca y nombre son requeridos', 'error'); return }
+    if (!purchaseItem) return
     if (!pForm.purchase_price) { showToast('El precio de compra es requerido', 'error'); return }
     if (!pForm.stock_quantity || pForm.stock_quantity < 1) { showToast('La cantidad debe ser al menos 1', 'error'); return }
     setSavingPurchase(true)
 
-    const primarySupplierId = pSuppliers[0] || purchaseItem?.supplier_id || null
+    const { brand, name } = purchaseItem
+    const primarySupplierId = pSuppliers[0] || purchaseItem.supplier_id || null
 
     // Insert product
     const { data: prod, error } = await supabase.from('products').insert([{
@@ -218,13 +202,11 @@ export default function ShoppingListPage() {
       }])
     }
 
-    // Mark shopping list item as purchased (only if it came from the list)
-    if (purchaseItem) {
-      await supabase.from('shopping_list').update({
-        is_purchased: true,
-        purchased_at: new Date().toISOString(),
-      }).eq('id', purchaseItem.id)
-    }
+    // Mark shopping list item as purchased
+    await supabase.from('shopping_list').update({
+      is_purchased: true,
+      purchased_at: new Date().toISOString(),
+    }).eq('id', purchaseItem.id)
 
     showToast(`✓ ${name} agregado al inventario`, 'success')
     closeProductModal()
@@ -257,18 +239,11 @@ export default function ShoppingListPage() {
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>Lista de Compras</h1>
           <p className="text-gray-500 mt-1 text-sm">Los perfumes comprados se agregan automáticamente al inventario</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={openDirectForm}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #059669, #047857)', boxShadow: '0 4px 12px rgba(5,150,105,0.3)' }}>
-            <Plus className="w-4 h-4" /> Nuevo Producto
-          </button>
-          <button onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}>
-            <Plus className="w-4 h-4" /> Agregar a la lista
-          </button>
-        </div>
+        <button onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}>
+          <Plus className="w-4 h-4" /> Nuevo Producto
+        </button>
       </div>
 
       {/* Add form */}
@@ -418,20 +393,18 @@ export default function ShoppingListPage() {
         </p>
       )}
 
-      {/* ── Product form modal ────────────────────────────────────────── */}
-      {isProductModalOpen && (
+      {/* ── Purchase confirmation modal ───────────────────────────────── */}
+      {purchaseItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-xl">
             {/* Header */}
             <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-lg font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  {purchaseItem ? 'Confirmar compra' : 'Nuevo Producto'}
+                  Confirmar compra
                 </h2>
                 <p className="text-sm text-gray-400 mt-0.5">
-                  {purchaseItem
-                    ? <><span className="font-semibold text-purple-600">{purchaseItem.brand} — {purchaseItem.name}</span>{' '}se agregará al inventario</>
-                    : 'Completa los datos para agregar el producto al inventario'}
+                  <span className="font-semibold text-purple-600">{purchaseItem.brand} — {purchaseItem.name}</span>{' '}se agregará al inventario
                 </p>
               </div>
               <button onClick={closeProductModal} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
@@ -440,27 +413,13 @@ export default function ShoppingListPage() {
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Brand + Name — only shown in direct mode */}
-              {showDirectForm && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={LabelClass}>Marca *</label>
-                    <input className={InputClass} value={pForm.brand} onChange={e => setPForm(f => ({ ...f, brand: e.target.value }))} placeholder="Ej. Tom Ford" autoFocus />
-                  </div>
-                  <div>
-                    <label className={LabelClass}>Nombre *</label>
-                    <input className={InputClass} value={pForm.name} onChange={e => setPForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej. Black Orchid" />
-                  </div>
-                </div>
-              )}
-
               {/* Basic info row */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={LabelClass}>SKU</label>
                   <div className="flex gap-1.5">
                     <input className={InputClass} value={pForm.sku} onChange={e => setPForm(f => ({ ...f, sku: e.target.value }))} placeholder="Auto-generado" />
-                    <button type="button" onClick={() => setPForm(f => ({ ...f, sku: generateSKU(purchaseItem?.brand ?? pForm.brand, purchaseItem?.name ?? pForm.name, f.size_ml) }))}
+                    <button type="button" onClick={() => setPForm(f => ({ ...f, sku: generateSKU(purchaseItem.brand, purchaseItem.name, f.size_ml) }))}
                       className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400">
                       <RefreshCw className="w-4 h-4" />
                     </button>
@@ -509,7 +468,7 @@ export default function ShoppingListPage() {
                 </div>
                 {pSuppliers.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-gray-200 py-3 px-4 text-xs text-gray-400 text-center cursor-pointer hover:border-purple-300 hover:text-purple-400"
-                    onClick={() => setPSuppliers(purchaseItem?.supplier_id ? [purchaseItem.supplier_id] : [''])}>
+                    onClick={() => setPSuppliers(purchaseItem.supplier_id ? [purchaseItem.supplier_id] : [''])}>
                     Sin proveedor — click para agregar
                   </div>
                 ) : pSuppliers.map((sid, idx) => (
@@ -633,7 +592,7 @@ export default function ShoppingListPage() {
               <button onClick={handleConfirmPurchase} disabled={savingPurchase}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
                 style={{ background: 'linear-gradient(135deg, #059669, #047857)', opacity: savingPurchase ? 0.7 : 1 }}>
-                {savingPurchase ? 'Agregando...' : purchaseItem ? '✓ Confirmar compra y agregar al inventario' : '✓ Agregar al inventario'}
+                {savingPurchase ? 'Agregando...' : '✓ Confirmar compra y agregar al inventario'}
               </button>
             </div>
           </div>
