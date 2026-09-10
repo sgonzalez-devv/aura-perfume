@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Truck, Mail, Phone, Globe } from 'lucide-react'
+import { formatPhoneInput } from '@/lib/phone'
 
 interface Supplier {
   id: string
@@ -275,7 +276,7 @@ export default function SuppliersPage() {
                 </div>
                 <div>
                   <label className={LabelClass}>Teléfono</label>
-                  <input className={InputClass} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 809 000 0000" />
+                  <input className={InputClass} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} placeholder="+1 (809) 000-0000" />
                 </div>
               </div>
               <div>

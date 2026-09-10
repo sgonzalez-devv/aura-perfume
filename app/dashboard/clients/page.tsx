@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Search, Plus, Edit2, Trash2, Star, Phone, MessageCircle, Download, X, AlertTriangle, CheckCircle, Users, Cake, ChevronRight } from 'lucide-react'
+import { formatPhoneInput } from '@/lib/phone'
 
 interface Client {
   id: string
@@ -450,11 +451,11 @@ export default function ClientsPage() {
                 </div>
                 <div>
                   <label className={LabelClass}>Teléfono</label>
-                  <input className={InputClass} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 809 000 0000" />
+                  <input className={InputClass} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} placeholder="+1 (809) 000-0000" />
                 </div>
                 <div>
                   <label className={LabelClass}>WhatsApp</label>
-                  <input className={InputClass} value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} placeholder="+1 809 000 0000" />
+                  <input className={InputClass} value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: formatPhoneInput(e.target.value) }))} placeholder="+1 (809) 000-0000" />
                 </div>
                 <div>
                   <label className={LabelClass}>Ciudad</label>
