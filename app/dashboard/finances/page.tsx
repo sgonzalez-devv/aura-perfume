@@ -54,6 +54,7 @@ interface Product {
   brand: string
   selling_price: number
   purchase_price: number
+  competitor_price: number
   stock_quantity: number
 }
 
@@ -167,6 +168,10 @@ export default function FinancesPage() {
   const [saleItems, setSaleItems] = useState<Array<{ product_id: string; quantity: number; unit_price: number; purchase_price: number }>>([])
   const [savingSale, setSavingSale] = useState(false)
 
+  // Sale shipping costs (for suggested price calculation)
+  const [supplierShipping, setSupplierShipping] = useState(0)
+  const [clientShipping, setClientShipping] = useState(0)
+
   // Expense form
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [expForm, setExpForm] = useState({ category: '', description: '', amount: 0, payment_method: 'Efectivo', expense_date: new Date().toISOString().slice(0, 10) })
@@ -249,7 +254,7 @@ export default function FinancesPage() {
   }
 
   async function fetchProducts() {
-    const { data } = await supabase.from('products').select('id, name, brand, selling_price, purchase_price, stock_quantity').eq('is_active', true).order('name')
+    const { data } = await supabase.from('products').select('id, name, brand, selling_price, purchase_price, competitor_price, stock_quantity').eq('is_active', true).order('name')
     setProducts(data || [])
   }
 
@@ -383,6 +388,8 @@ export default function FinancesPage() {
     setSaleClient('')
     setSaleDiscount(0)
     setSaleNotes('')
+    setSupplierShipping(0)
+    setClientShipping(0)
     await Promise.all([fetchSales(), fetchCashFlow()])
     setSavingSale(false)
   }
@@ -506,7 +513,17 @@ export default function FinancesPage() {
   })
 
   const saleTotal = saleItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0)
-  const saleFinal = Math.max(0, saleTotal - saleDiscount)
+  const saleFinal = Math.max(0, saleTotal + clientShipping - saleDiscount)
+  const totalSaleQty = saleItems.reduce((s, i) => s + i.quantity, 0)
+
+  function suggestedSalePrice(productId: string, qty: number): number {
+    const prod = products.find(p => p.id === productId)
+    if (!prod) return 0
+    const shippingPerUnit = totalSaleQty > 0 ? supplierShipping / totalSaleQty : 0
+    const trueCost = prod.purchase_price + shippingPerUnit
+    if (prod.competitor_price > 0) return Math.round(prod.competitor_price * 0.9)
+    return Math.round(trueCost * 2)
+  }
 
   const tabs = [
     { key: 'sales', label: 'Ventas' },
@@ -1033,7 +1050,7 @@ export default function FinancesPage() {
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="sticky top-0 bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>Nueva Venta</h2>
-              <button onClick={() => { setShowSaleModal(false); setSaleItems([]) }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowSaleModal(false); setSaleItems([]); setSupplierShipping(0); setClientShipping(0) }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1073,6 +1090,35 @@ export default function FinancesPage() {
                 </div>
               </div>
 
+              {/* Shipping costs */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Costos de envío — para sugerencia de precio</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={LabelClass}>Envío suplidor → mi empresa (DOP)</label>
+                    <input
+                      type="number"
+                      className={InputClass}
+                      value={supplierShipping || ''}
+                      onChange={e => setSupplierShipping(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-amber-600 mt-1">Se distribuye entre las unidades vendidas</p>
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Envío empresa → cliente (DOP)</label>
+                    <input
+                      type="number"
+                      className={InputClass}
+                      value={clientShipping || ''}
+                      onChange={e => setClientShipping(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-amber-600 mt-1">Se suma al total del cliente</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Products */}
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -1082,36 +1128,61 @@ export default function FinancesPage() {
                   </button>
                 </div>
                 <div className="space-y-3">
-                  {saleItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 rounded-xl" style={{ background: '#faf9ff', border: '1px solid #e9d5ff' }}>
-                      <div className="col-span-5 flex gap-1">
-                        <select className={InputClass} value={item.product_id} onChange={e => updateSaleItem(idx, 'product_id', e.target.value)}>
-                          <option value="">Seleccionar producto</option>
-                          {products.map(p => <option key={p.id} value={p.id}>{p.name} — {p.brand}</option>)}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => { setQuickProductIdx(idx); setShowQuickProduct(true) }}
-                          title="Crear nuevo producto"
-                          className="flex-shrink-0 w-8 h-9 flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                  {saleItems.map((item, idx) => {
+                    const suggested = item.product_id ? suggestedSalePrice(item.product_id, item.quantity) : 0
+                    return (
+                      <div key={idx} className="p-3 rounded-xl space-y-2" style={{ background: '#faf9ff', border: '1px solid #e9d5ff' }}>
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5 flex gap-1">
+                            <select className={InputClass} value={item.product_id} onChange={e => updateSaleItem(idx, 'product_id', e.target.value)}>
+                              <option value="">Seleccionar producto</option>
+                              {products.map(p => <option key={p.id} value={p.id}>{p.name} — {p.brand}</option>)}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => { setQuickProductIdx(idx); setShowQuickProduct(true) }}
+                              title="Crear nuevo producto"
+                              className="flex-shrink-0 w-8 h-9 flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="col-span-2">
+                            <input type="number" className={InputClass} value={item.quantity} min={1} onChange={e => updateSaleItem(idx, 'quantity', parseInt(e.target.value) || 1)} placeholder="Cant." />
+                          </div>
+                          <div className="col-span-3">
+                            <input type="number" className={InputClass} value={item.unit_price || ''} onChange={e => updateSaleItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} placeholder="Precio" />
+                          </div>
+                          <div className="col-span-1 text-xs text-gray-500 text-center">{formatDOP(item.unit_price * item.quantity)}</div>
+                          <div className="col-span-1">
+                            <button onClick={() => setSaleItems(items => items.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        {item.product_id && suggested > 0 && (
+                          <div className="flex items-center gap-2 pl-1">
+                            <span className="text-xs text-gray-400">Precio sugerido:</span>
+                            <button
+                              onClick={() => updateSaleItem(idx, 'unit_price', suggested)}
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors hover:opacity-80"
+                              style={{ background: '#ede9fe', color: '#7c3aed' }}
+                              title="Aplicar precio sugerido"
+                            >
+                              {formatDOP(suggested)} — aplicar ↑
+                            </button>
+                            {(() => {
+                              const prod = products.find(p => p.id === item.product_id)
+                              const shippingPerUnit = totalSaleQty > 0 ? supplierShipping / totalSaleQty : 0
+                              const trueCost = (prod?.purchase_price || 0) + shippingPerUnit
+                              const margin = suggested > 0 ? Math.round(((suggested - trueCost) / suggested) * 100) : 0
+                              return <span className="text-xs text-gray-400">Margen estimado: {margin}%</span>
+                            })()}
+                          </div>
+                        )}
                       </div>
-                      <div className="col-span-2">
-                        <input type="number" className={InputClass} value={item.quantity} min={1} onChange={e => updateSaleItem(idx, 'quantity', parseInt(e.target.value) || 1)} placeholder="Cant." />
-                      </div>
-                      <div className="col-span-3">
-                        <input type="number" className={InputClass} value={item.unit_price || ''} onChange={e => updateSaleItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} placeholder="Precio" />
-                      </div>
-                      <div className="col-span-1 text-xs text-gray-500 text-center">{formatDOP(item.unit_price * item.quantity)}</div>
-                      <div className="col-span-1">
-                        <button onClick={() => setSaleItems(items => items.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {saleItems.length === 0 && (
                     <div className="text-center py-6 rounded-xl text-gray-400 text-sm" style={{ border: '2px dashed #e9d5ff' }}>
                       Agrega productos a la venta
@@ -1123,9 +1194,15 @@ export default function FinancesPage() {
               {saleItems.length > 0 && (
                 <div className="rounded-xl p-4" style={{ background: '#f5f3ff', border: '1px solid #e9d5ff' }}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">Subtotal</span>
+                    <span className="text-gray-600">Subtotal productos</span>
                     <span className="font-medium">{formatDOP(saleTotal)}</span>
                   </div>
+                  {clientShipping > 0 && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Envío al cliente</span>
+                      <span className="text-gray-700">+{formatDOP(clientShipping)}</span>
+                    </div>
+                  )}
                   {saleDiscount > 0 && (
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-gray-600">Descuento</span>
@@ -1145,7 +1222,7 @@ export default function FinancesPage() {
               </div>
             </div>
             <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-gray-100 flex gap-3">
-              <button onClick={() => { setShowSaleModal(false); setSaleItems([]) }} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600">Cancelar</button>
+              <button onClick={() => { setShowSaleModal(false); setSaleItems([]); setSupplierShipping(0); setClientShipping(0) }} className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600">Cancelar</button>
               <button onClick={handleCreateSale} disabled={savingSale}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
                 style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', opacity: savingSale ? 0.7 : 1 }}>
@@ -1172,7 +1249,7 @@ export default function FinancesPage() {
         <QuickCreateProduct
           onCreated={(id, label, sellingPrice, purchasePrice) => {
             const [name, brand] = label.split(' — ')
-            setProducts(prev => [...prev, { id, name, brand: brand || '', selling_price: sellingPrice, purchase_price: purchasePrice, stock_quantity: 0 }])
+            setProducts(prev => [...prev, { id, name, brand: brand || '', selling_price: sellingPrice, purchase_price: purchasePrice, competitor_price: 0, stock_quantity: 0 }])
             updateSaleItem(quickProductIdx, 'product_id', id)
             setShowQuickProduct(false)
             setQuickProductIdx(null)
