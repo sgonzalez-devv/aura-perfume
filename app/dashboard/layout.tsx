@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 import {
-  LayoutDashboard, Package, Users, TrendingUp, Truck, ShoppingCart, ClipboardList, StickyNote,
+  LayoutDashboard, Package, Users, TrendingUp, Truck, ShoppingCart, ClipboardList, StickyNote, CalendarDays,
   Menu, X, LogOut, ChevronRight, Sparkles
 } from 'lucide-react'
 
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/dashboard/suppliers', label: 'Proveedores', icon: Truck },
   { href: '/dashboard/orders', label: 'Órdenes de Compra', icon: ShoppingCart },
   { href: '/dashboard/shopping-list', label: 'Lista de Compras', icon: ClipboardList },
+  { href: '/dashboard/calendar', label: 'Calendario', icon: CalendarDays },
   { href: '/dashboard/notes', label: 'Notas', icon: StickyNote },
 ]
 
