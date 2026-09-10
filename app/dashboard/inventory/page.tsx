@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Search, Plus, Edit2, Trash2, X, AlertTriangle, CheckCircle, Package, ShoppingBag, ChevronLeft, ChevronRight, RefreshCw, Lightbulb } from 'lucide-react'
 import QuickCreateSupplier from '@/components/QuickCreateSupplier'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Product {
   id: string
@@ -86,6 +86,19 @@ export default function InventoryPage() {
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Open add modal pre-filled from shopping list query params
+  useEffect(() => {
+    const brand = searchParams.get('brand')
+    const name = searchParams.get('name')
+    if (brand || name) {
+      setEditing(null)
+      setForm({ ...emptyProduct, brand: brand || '', name: name || '' })
+      setShowModal(true)
+      router.replace('/dashboard/inventory')
+    }
+  }, [searchParams, router])
 
   // Auto-generate SKU for new products when brand/name/size change
   useEffect(() => {

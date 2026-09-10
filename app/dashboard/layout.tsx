@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 import {
-  LayoutDashboard, Package, Users, TrendingUp, Truck, ShoppingCart,
+  LayoutDashboard, Package, Users, TrendingUp, Truck, ShoppingCart, ClipboardList,
   Menu, X, LogOut, ChevronRight, Sparkles
 } from 'lucide-react'
 
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard/finances', label: 'Finanzas', icon: TrendingUp },
   { href: '/dashboard/suppliers', label: 'Proveedores', icon: Truck },
   { href: '/dashboard/orders', label: 'Órdenes de Compra', icon: ShoppingCart },
+  { href: '/dashboard/shopping-list', label: 'Lista de Compras', icon: ClipboardList },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
