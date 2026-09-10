@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Building2, Loader2 } from 'lucide-react'
+import { formatPhoneInput } from '@/lib/phone'
 
 interface Props {
   onCreated: (id: string, name: string) => void
@@ -78,9 +79,9 @@ export default function QuickCreateSupplier({ onCreated, onClose }: Props) {
             <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono</label>
             <input
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
-              placeholder="+1 809 000 0000"
+              placeholder="+1 (809) 000-0000"
               value={phone}
-              onChange={e => setPhone(e.target.value)}
+              onChange={e => setPhone(formatPhoneInput(e.target.value))}
             />
           </div>
           <div>
