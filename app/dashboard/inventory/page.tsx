@@ -84,6 +84,10 @@ export default function InventoryPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [showQuickSupplier, setShowQuickSupplier] = useState(false)
 
+  // Multi-supplier state
+  const [formSuppliers, setFormSuppliers] = useState<string[]>([])
+  const [productSuppliers, setProductSuppliers] = useState<Record<string, Array<{ supplier_id: string; name: string; is_primary: boolean }>>>({})
+
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type })
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -95,6 +99,7 @@ export default function InventoryPage() {
     if (brand || name) {
       setEditing(null)
       setForm({ ...emptyProduct, brand: brand || '', name: name || '' })
+      setFormSuppliers([])
       setShowModal(true)
       router.replace('/dashboard/inventory')
     }
@@ -111,12 +116,20 @@ export default function InventoryPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [{ data: prods }, { data: supps }] = await Promise.all([
+    const [{ data: prods }, { data: supps }, { data: prodSupps }] = await Promise.all([
       supabase.from('products').select('*').order('name'),
       supabase.from('suppliers').select('id, name').order('name'),
+      supabase.from('product_suppliers').select('product_id, supplier_id, is_primary, suppliers(name)'),
     ])
     setProducts(prods || [])
     setSuppliers(supps || [])
+
+    const map: Record<string, Array<{ supplier_id: string; name: string; is_primary: boolean }>> = {}
+    for (const row of (prodSupps || []) as unknown as Array<{ product_id: string; supplier_id: string; is_primary: boolean; suppliers: { name: string } | null }>) {
+      if (!map[row.product_id]) map[row.product_id] = []
+      map[row.product_id].push({ supplier_id: row.supplier_id, name: row.suppliers?.name || '', is_primary: row.is_primary })
+    }
+    setProductSuppliers(map)
     setLoading(false)
   }, [])
 
@@ -125,6 +138,7 @@ export default function InventoryPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyProduct)
+    setFormSuppliers([])
     setShowModal(true)
   }
 
@@ -132,6 +146,9 @@ export default function InventoryPage() {
     setEditing(p)
     const { id, ...rest } = p
     setForm(rest)
+    const existing = productSuppliers[p.id] || []
+    const sorted = [...existing].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+    setFormSuppliers(sorted.map(s => s.supplier_id))
     setShowModal(true)
   }
 
@@ -139,6 +156,7 @@ export default function InventoryPage() {
     setShowModal(false)
     setEditing(null)
     setForm(emptyProduct)
+    setFormSuppliers([])
   }
 
   async function handleSave() {
@@ -147,10 +165,11 @@ export default function InventoryPage() {
       return
     }
     setSaving(true)
+    const primarySupplierId = formSuppliers[0] || null
     const payload = {
       ...form,
       sku: form.sku || null,
-      supplier_id: form.supplier_id || null,
+      supplier_id: primarySupplierId,
       size_ml: Number(form.size_ml) || null,
       purchase_price: Number(form.purchase_price),
       competitor_price: Number(form.competitor_price) || 0,
@@ -158,9 +177,24 @@ export default function InventoryPage() {
       stock_quantity: Number(form.stock_quantity),
       min_stock_alert: Number(form.min_stock_alert),
     }
+
+    async function syncProductSuppliers(productId: string) {
+      await supabase.from('product_suppliers').delete().eq('product_id', productId)
+      if (formSuppliers.length > 0) {
+        await supabase.from('product_suppliers').insert(
+          formSuppliers.map((sid, idx) => ({
+            product_id: productId,
+            supplier_id: sid,
+            is_primary: idx === 0,
+          }))
+        )
+      }
+    }
+
     if (editing) {
       const { error } = await supabase.from('products').update(payload).eq('id', editing.id)
       if (error) { showToast('Error al actualizar producto', 'error'); setSaving(false); return }
+      await syncProductSuppliers(editing.id)
 
       const stockAdded = Number(form.stock_quantity) - (editing.stock_quantity || 0)
       if (stockAdded > 0 && Number(form.purchase_price) > 0) {
@@ -178,8 +212,9 @@ export default function InventoryPage() {
       }
       closeModal(); fetchData()
     } else {
-      const { error } = await supabase.from('products').insert([payload])
-      if (error) { showToast('Error al crear producto', 'error'); setSaving(false); return }
+      const { data: newProd, error } = await supabase.from('products').insert([payload]).select().single()
+      if (error || !newProd) { showToast('Error al crear producto', 'error'); setSaving(false); return }
+      await syncProductSuppliers(newProd.id)
 
       const totalCost = Number(form.purchase_price) * Number(form.stock_quantity)
       if (totalCost > 0) {
@@ -249,6 +284,9 @@ export default function InventoryPage() {
       : stock <= min * 2 ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
       : 'text-green-600 bg-green-50 border-green-200'
     const stockLabel = stock === 0 ? 'Sin stock' : `${stock} uds.`
+    const cardSuppliers = productSuppliers[p.id] || []
+    const primarySupplier = cardSuppliers.find(s => s.is_primary) || cardSuppliers[0]
+    const altCount = cardSuppliers.length - 1
 
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
@@ -280,6 +318,22 @@ export default function InventoryPage() {
           </p>
           {p.sku && <p className="text-xs text-gray-400 mt-1">SKU: {p.sku}</p>}
         </div>
+
+        {/* Suppliers */}
+        {cardSuppliers.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {primarySupplier && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                {primarySupplier.name}
+              </span>
+            )}
+            {altCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-500">
+                +{altCount} alt.
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Stock bar */}
         {min > 0 && (
@@ -519,22 +573,67 @@ export default function InventoryPage() {
                     )}
                   </div>
                 </div>
-                <div>
-                  <label className={LabelClass}>Proveedor</label>
-                  <div className="flex gap-1.5">
-                    <select className={InputClass} value={form.supplier_id} onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))}>
-                      <option value="">Sin proveedor</option>
-                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickSupplier(true)}
-                      title="Crear nuevo proveedor"
-                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={LabelClass} style={{ margin: 0 }}>Proveedores</label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickSupplier(true)}
+                        className="text-xs px-2 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Nuevo proveedor
+                      </button>
+                      {formSuppliers.length < suppliers.length && (
+                        <button
+                          type="button"
+                          onClick={() => setFormSuppliers(f => [...f, ''])}
+                          className="text-xs px-2 py-1 rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Agregar proveedor
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {formSuppliers.length === 0 ? (
+                    <div
+                      className="rounded-lg border-2 border-dashed border-gray-200 py-3 px-4 text-xs text-gray-400 text-center cursor-pointer hover:border-purple-300 hover:text-purple-400 transition-colors"
+                      onClick={() => setFormSuppliers([''])}
+                    >
+                      Sin proveedores — click para agregar
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {formSuppliers.map((sid, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          {idx === 0 && (
+                            <span className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">Principal</span>
+                          )}
+                          {idx > 0 && (
+                            <span className="flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">Alt. {idx}</span>
+                          )}
+                          <select
+                            className={InputClass}
+                            value={sid}
+                            onChange={e => setFormSuppliers(f => f.map((v, i) => i === idx ? e.target.value : v))}
+                          >
+                            <option value="">Seleccionar proveedor</option>
+                            {suppliers
+                              .filter(s => s.id === sid || !formSuppliers.includes(s.id))
+                              .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setFormSuppliers(f => f.filter((_, i) => i !== idx))}
+                            className="flex-shrink-0 p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {formSuppliers.length > 0 && <p className="text-xs text-gray-400 mt-1.5">El primero de la lista es el proveedor principal</p>}
                 </div>
               </div>
 
@@ -683,7 +782,7 @@ export default function InventoryPage() {
         <QuickCreateSupplier
           onCreated={(id, name) => {
             setSuppliers(prev => [...prev, { id, name }])
-            setForm(f => ({ ...f, supplier_id: id }))
+            setFormSuppliers(prev => [...prev, id])
             setShowQuickSupplier(false)
           }}
           onClose={() => setShowQuickSupplier(false)}
