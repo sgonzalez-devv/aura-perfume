@@ -4,7 +4,8 @@
  */
 export function formatPhoneInput(raw: string): string {
   let digits = raw.replace(/\D/g, '')
-  if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1)
+  // Strip leading country code — the +1 prefix in the formatted value always adds a leading 1
+  if (digits.startsWith('1')) digits = digits.slice(1)
   digits = digits.slice(0, 10)
 
   if (digits.length === 0) return ''
