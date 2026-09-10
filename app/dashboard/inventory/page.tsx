@@ -21,6 +21,8 @@ interface Product {
   base_notes: string
   supplier_id: string
   purchase_price: number
+  supplier_shipping_cost: number
+  client_shipping_cost: number
   competitor_price: number
   selling_price: number
   stock_quantity: number
@@ -52,7 +54,8 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 const emptyProduct: Omit<Product, 'id'> = {
   name: '', brand: '', sku: '', category: '', concentration: '', size_ml: 0,
   gender: '', fragrance_family: '', top_notes: '', heart_notes: '', base_notes: '',
-  supplier_id: '', purchase_price: 0, competitor_price: 0, selling_price: 0,
+  supplier_id: '', purchase_price: 0, supplier_shipping_cost: 0, client_shipping_cost: 0,
+  competitor_price: 0, selling_price: 0,
   stock_quantity: 0, min_stock_alert: 5, is_active: true,
 }
 
@@ -63,10 +66,11 @@ function generateSKU(brand: string, name: string, size_ml: number): string {
   return `${b}-${n}-${s}`
 }
 
-function suggestedPrice(purchase: number, competitor: number): number {
+function suggestedPrice(purchase: number, supplierShipping: number, clientShipping: number, competitor: number): number {
   if (purchase <= 0) return 0
-  if (competitor > 0) return Math.round(competitor * 0.9)  // 10% below competitor
-  return Math.round(purchase * 2)  // fallback: 100% markup
+  const trueCost = purchase + supplierShipping + clientShipping
+  if (competitor > 0) return Math.round(Math.max(competitor * 0.9, trueCost * 1.3))
+  return Math.round(trueCost * 2)
 }
 
 export default function InventoryPage() {
@@ -112,7 +116,7 @@ export default function InventoryPage() {
     }
   }, [form.brand, form.name, form.size_ml, editing])
 
-  const suggested = suggestedPrice(form.purchase_price, form.competitor_price)
+  const suggested = suggestedPrice(form.purchase_price, form.supplier_shipping_cost, form.client_shipping_cost, form.competitor_price)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -693,7 +697,7 @@ export default function InventoryPage() {
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Precios y Stock</p>
 
-                {/* Cost + Competitor inputs */}
+                {/* Cost + Shipping + Competitor inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className={LabelClass}>Precio de Compra al Suplidor (DOP) *</label>
@@ -704,6 +708,16 @@ export default function InventoryPage() {
                     <label className={LabelClass}>Precio de la Competencia (DOP)</label>
                     <input type="number" className={InputClass} value={form.competitor_price || ''} onChange={e => setForm(f => ({ ...f, competitor_price: parseFloat(e.target.value) || 0 }))} placeholder="Ej. 5500" />
                     <p className="text-xs text-gray-400 mt-1">Precio de mercado / referencia</p>
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Envío suplidor → mi empresa (DOP)</label>
+                    <input type="number" className={InputClass} value={form.supplier_shipping_cost || ''} onChange={e => setForm(f => ({ ...f, supplier_shipping_cost: parseFloat(e.target.value) || 0 }))} placeholder="Ej. 300" />
+                    <p className="text-xs text-gray-400 mt-1">Costo de envío por unidad desde el proveedor</p>
+                  </div>
+                  <div>
+                    <label className={LabelClass}>Envío empresa → cliente (DOP)</label>
+                    <input type="number" className={InputClass} value={form.client_shipping_cost || ''} onChange={e => setForm(f => ({ ...f, client_shipping_cost: parseFloat(e.target.value) || 0 }))} placeholder="Ej. 200" />
+                    <p className="text-xs text-gray-400 mt-1">Costo de entrega al cliente por unidad</p>
                   </div>
                 </div>
 
@@ -716,13 +730,19 @@ export default function InventoryPage() {
                         <p className="text-sm font-semibold text-purple-800 mb-0.5">Precio sugerido de venta</p>
                         <p className="text-2xl font-bold text-purple-700">{formatDOP(suggested)}</p>
                         <p className="text-xs text-purple-500 mt-1">
-                          {form.competitor_price > 0
-                            ? `10% por debajo de la competencia (${formatDOP(form.competitor_price)})`
-                            : '100% de margen sobre precio de compra (sin referencia de competencia)'}
+                          {(() => {
+                            const trueCost = form.purchase_price + form.supplier_shipping_cost + form.client_shipping_cost
+                            if (form.competitor_price > 0)
+                              return `10% bajo competencia (${formatDOP(form.competitor_price)}) · Costo real: ${formatDOP(trueCost)}`
+                            return `2× costo real (compra + envíos = ${formatDOP(trueCost)})`
+                          })()}
                         </p>
                         {form.purchase_price > 0 && (
                           <p className="text-xs text-purple-400 mt-0.5">
-                            Ganancia sugerida: {formatDOP(suggested - form.purchase_price)} · Margen: {(((suggested - form.purchase_price) / suggested) * 100).toFixed(1)}%
+                            {(() => {
+                              const trueCost = form.purchase_price + form.supplier_shipping_cost + form.client_shipping_cost
+                              return `Ganancia neta sugerida: ${formatDOP(suggested - trueCost)} · Margen: ${(((suggested - trueCost) / suggested) * 100).toFixed(1)}%`
+                            })()}
                           </p>
                         )}
                         <button type="button" onClick={() => setForm(f => ({ ...f, selling_price: suggested }))}
