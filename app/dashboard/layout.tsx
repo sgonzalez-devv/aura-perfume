@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Package, Users, TrendingUp, Truck, ShoppingCart, ClipboardList, StickyNote, CalendarDays,
   Menu, X, LogOut, ChevronRight, Sparkles
 } from 'lucide-react'
+import PushNotificationSetup from '@/components/PushNotificationSetup'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -128,6 +129,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {user.email}
             </p>
           </div>
+        </div>
+        <div className="mb-2">
+          <PushNotificationSetup />
         </div>
         <button
           onClick={handleSignOut}

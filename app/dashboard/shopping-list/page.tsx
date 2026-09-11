@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { sendPushNotification } from '@/lib/push'
 import {
   Plus, X, CheckCircle, AlertTriangle, ShoppingBag, Check,
   Trash2, RotateCcw, Lightbulb, RefreshCw,
@@ -218,6 +219,12 @@ export default function ShoppingListPage() {
       is_purchased: true,
       purchased_at: new Date().toISOString(),
     }).eq('id', confirmItem.id)
+
+    sendPushNotification(
+      '📦 Producto agregado al inventario',
+      `${confirmItem.brand} ${confirmItem.name} — ${confirmItem.stock_quantity ?? 1} und.`,
+      '/dashboard/inventory'
+    )
 
     showToast(`✓ ${confirmItem.name} agregado al inventario`, 'success')
     setConfirmItem(null)

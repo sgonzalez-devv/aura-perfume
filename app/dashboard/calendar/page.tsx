@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
+import { sendPushNotification } from '@/lib/push'
 import {
   ChevronLeft, ChevronRight, Plus, X, Check, Truck, ShoppingBag,
   Calendar, AlertCircle, CheckCircle,
@@ -142,6 +143,14 @@ export default function CalendarPage() {
       notes: form.notes.trim(),
       created_by: authorName,
     }])
+
+    const typeLabel = form.type === 'pedido' ? 'Pedido a proveedor' : 'Envío a cliente'
+    const who = form.type === 'pedido' ? supplier?.name : `${client?.first_name} ${client?.last_name}`.trim()
+    sendPushNotification(
+      `📅 ${typeLabel} registrado`,
+      `${form.product_name}${who ? ` — ${who}` : ''} · ${authorName}`,
+      '/dashboard/calendar'
+    )
 
     setShowModal(false)
     setSaving(false)

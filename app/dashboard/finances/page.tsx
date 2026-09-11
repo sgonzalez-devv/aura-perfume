@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { sendPushNotification } from '@/lib/push'
 import { Plus, X, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, DollarSign, Trash2, ChevronDown, ChevronRight, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts'
 import QuickCreateClient from '@/components/QuickCreateClient'
@@ -380,6 +381,15 @@ export default function FinancesPage() {
       }
     }
 
+    const itemSummary = saleItems.length === 1
+      ? (products.find(p => p.id === saleItems[0].product_id)?.name || 'producto')
+      : `${saleItems.length} productos`
+    sendPushNotification(
+      '💰 Venta registrada',
+      `${formatDOP(total)} — ${itemSummary}`,
+      '/dashboard/finances'
+    )
+
     showToast('Venta registrada correctamente', 'success')
     setShowSaleModal(false)
     setSaleItems([])
@@ -470,6 +480,12 @@ export default function FinancesPage() {
         }
       }
     }
+
+    sendPushNotification(
+      '📉 Gasto registrado',
+      `${expForm.category} — ${formatDOP(amount)}`,
+      '/dashboard/finances'
+    )
 
     showToast('Gasto registrado', 'success')
     setShowExpenseForm(false)
