@@ -25,6 +25,7 @@ interface CalendarTask {
 
 interface Supplier { id: string; name: string }
 interface Client { id: string; first_name: string; last_name: string }
+interface Product { id: string; name: string; brand: string }
 
 const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -57,6 +58,7 @@ export default function CalendarPage() {
   const [tasks, setTasks] = useState<CalendarTask[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()))
 
@@ -93,12 +95,14 @@ export default function CalendarPage() {
   }, [weekStart])
 
   const fetchMeta = useCallback(async () => {
-    const [{ data: supps }, { data: cls }] = await Promise.all([
+    const [{ data: supps }, { data: cls }, { data: prods }] = await Promise.all([
       supabase.from('suppliers').select('id, name').order('name'),
       supabase.from('clients').select('id, first_name, last_name').order('first_name'),
+      supabase.from('products').select('id, name, brand').order('name'),
     ])
     setSuppliers(supps || [])
     setClients(cls || [])
+    setProducts(prods || [])
   }, [])
 
   useEffect(() => { fetchMeta() }, [fetchMeta])
@@ -119,7 +123,7 @@ export default function CalendarPage() {
   }
 
   async function handleSave() {
-    if (!form.product_name.trim()) return
+    if (!form.product_name) return
     if (form.type === 'pedido' && !form.supplier_id) return
     if (form.type === 'envio' && !form.client_id) return
     setSaving(true)
@@ -134,7 +138,7 @@ export default function CalendarPage() {
       supplier_name: form.type === 'pedido' ? supplier?.name || '' : '',
       client_id: form.type === 'envio' ? form.client_id || null : null,
       client_name: form.type === 'envio' ? `${client?.first_name} ${client?.last_name}`.trim() : '',
-      product_name: form.product_name.trim(),
+      product_name: form.product_name,
       notes: form.notes.trim(),
       created_by: authorName,
     }])
@@ -340,13 +344,15 @@ export default function CalendarPage() {
               {/* Product */}
               <div>
                 <label className={LabelClass}>Perfume / Producto *</label>
-                <input
+                <select
                   className={InputClass}
                   value={form.product_name}
-                  onChange={e => setForm(f => ({ ...f, product_name: e.target.value }))}
-                  placeholder="Ej. Dior Sauvage 100ml"
-                  autoFocus
-                />
+                  onChange={e => setForm(f => ({ ...f, product_name: e.target.value }))}>
+                  <option value="">Seleccionar producto</option>
+                  {products.map(p => (
+                    <option key={p.id} value={`${p.brand} ${p.name}`}>{p.brand} — {p.name}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Notes */}
@@ -368,7 +374,7 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.product_name.trim() || (form.type === 'pedido' ? !form.supplier_id : !form.client_id)}
+                disabled={saving || !form.product_name || (form.type === 'pedido' ? !form.supplier_id : !form.client_id)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity disabled:opacity-50"
                 style={{ background: form.type === 'pedido' ? '#dc2626' : '#16a34a' }}>
                 {saving ? 'Guardando...' : 'Agregar tarea'}
