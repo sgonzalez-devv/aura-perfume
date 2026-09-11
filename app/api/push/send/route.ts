@@ -9,8 +9,8 @@ webpush.setVapidDetails(
 );
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  'https://fiieosdzkpzqtsfijydb.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpaWVvc2R6a3B6cXRzZmlqeWRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5Njk1MzMsImV4cCI6MjEwNDU0NTUzM30.AMAwpCpVDGGMT08sE3emwWjllLG3xeJOE4gd6uVF5tI'
 );
 
 export async function POST(req: NextRequest) {
